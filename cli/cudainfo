@@ -2,11 +2,29 @@
 
 import sys, glob
 
-devices = glob.glob("/dev/nvidia[0-9]")
+##### custom change
+import os
+# Check multiple GPU device paths for WSL2 compatibility
+devices = []
+devices.extend(glob.glob("/dev/nvidia[0-9]"))
+if os.path.exists("/dev/dxg"):
+    devices.append("/dev/dxg")
+if os.path.exists("/dev/nvidiactl"):
+    devices.append("/dev/nvidiactl")
+    
 if len(devices) == 0:
-    print("CUDA not available or no CUDA-capable GPU found.")
-    sys.exit(0)
-
+    # Fallback: detect GPU via TensorFlow
+    try:
+        import tensorflow as tf
+        if len(tf.config.list_physical_devices('GPU')) > 0:
+            devices = ["tensorflow_gpu_detected"]
+            print("GPU detected via TensorFlow")
+        else:
+            print("CUDA not available or no CUDA-capable GPU found.")
+            sys.exit(0)
+    except:
+        print("CUDA not available or no CUDA-capable GPU found.")
+        sys.exit(0)
 
 cc_cores_per_SM_dict = {
     (2,0) : 32,
