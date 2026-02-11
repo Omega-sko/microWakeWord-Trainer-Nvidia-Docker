@@ -36,18 +36,36 @@ fi
 
 cd "${DATA_DIR}"
 
+##### custom change
 [ -z "${GPU}" ] && {
     GPU=false
-    [ -c /dev/nvidiactl ] && {
+    echo ""
+    # Check multiple possible GPU device files for WSL2 compatibility
+    if [ -c /dev/nvidiactl ]; then
         GPU=true
-        echo "   Nvidia GPU detected"
-    }
+        echo "   Nvidia GPU detected via /dev/nvidiactl"
+    elif [ -c /dev/dxg ]; then
+        GPU=true
+        # Check if nvidia-smi is available to confirm NVIDIA GPU
+        if command -v nvidia-smi >/dev/null 2>&1; then
+            echo "   NVIDIA GPU detected via WSL2 /dev/dxg + nvidia-smi"
+        else
+            echo "   GPU detected via WSL2 /dev/dxg (non-NVIDIA or no driver tools)"
+        fi
+    else
+        # If no device files exist, GPU remains false
+        echo "   No GPU device files found (/dev/nvidiactl or /dev/dxg)"
+    fi
 }
 
 "${GPU}" || export CUDA_VISIBLE_DEVICES=-1
 
 VENV="${DATA_DIR}/.venv"
-[ -n "${VIRTUAL_ENV}" ] && deactivate
+#####custom change
+# Deactivate venv only if command exists to avoid error
+if [ -n "${VIRTUAL_ENV}" ] && command -v deactivate >/dev/null 2>&1; then
+    deactivate
+fi
 
 if [ -n "${PYTHON}" ] ; then
     PYTHONS=( "${PYTHON}" )
@@ -128,8 +146,9 @@ pip_install -r "${ROOTDIR}/requirements.txt"
 
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
 echo "   ===== Installing Tensorflow${tfgpu} ====="
-pip_install ai_edge_litert "tensorflow${tfgpu}==2.20.0" "tensorboard==2.20.0" \
-    "tensorboard-data-server==0.7.2"
+##### custom change
+pip_install ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
+    "tensorboard-data-server"
 
 ${GPU} && torchgpu='--index-url https://download.pytorch.org/whl/cu129' || torchgpu=""
 echo "   ===== Installing torch and torchaudio ${torchgpu:+[cuda]} ====="
@@ -140,8 +159,15 @@ MWW="${DATA_DIR}/tools/microWakeWord"
 if [ ! -d "${MWW}" ] || [ -n "$(git -C "${MWW}" status --porcelain)" ] ; then
     rm -rf "${MWW}" || :
     echo "   Cloning micro-wake-word to ${DATA_DIR}/tools"
-    git clone https://github.com/TaterTotterson/micro-wake-word "${MWW}" &>/dev/null
+    git clone https://github.com/Omega-sko/micro-wake-word "${MWW}" &>/dev/null
 fi
+
+##### custom change
+echo ""
+echo "   Patching microwakeword to require tf-nightly"
+echo ""
+sed -i 's/"tensorflow>=2.16"/"tf-nightly"/g' "${MWW}/setup.py"
+
 echo "   Installing microwakeword"
 pip_install -e "${MWW}"
 
