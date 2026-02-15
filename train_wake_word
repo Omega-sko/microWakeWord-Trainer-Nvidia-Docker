@@ -118,13 +118,16 @@ POST_AUGMENT_TS=$EPOCHSECONDS
 PERSONAL_SAMPLES_DIR="${DATA_DIR}/personal_samples"
 PERSONAL_FEATURES_DIR="${DATA_DIR}/work/personal_augmented_features"
 
-WAV_COUNT=$(find "${PERSONAL_SAMPLES_DIR}" -maxdepth 1 -type f -name "*.wav" 2>/dev/null | wc -l || echo 0)
+WAV_COUNT=$(find "${PERSONAL_SAMPLES_DIR}" -maxdepth 1 -type f -name "*.wav" 2>/dev/null | wc -l)
 
 if [ "${WAV_COUNT}" -gt 0 ] ; then
     echo "===== Personal samples detected: ${WAV_COUNT} WAV file(s) ====="
     echo "   Rebuilding personal augmented features (always fresh)..."
     rm -rf "${PERSONAL_FEATURES_DIR}" || :
-    mkdir -p "${PERSONAL_FEATURES_DIR}" || :
+    if ! mkdir -p "${PERSONAL_FEATURES_DIR}" ; then
+        echo "ERROR: Failed to create ${PERSONAL_FEATURES_DIR}" >&2
+        exit 1
+    fi
     python -u "${CLIDIR}/wake_word_sample_augmenter" \
         --data-dir="${DATA_DIR}" \
         --only-personal || { rm -rf "${PERSONAL_FEATURES_DIR}" ; exit 1 ; }
