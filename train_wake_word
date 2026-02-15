@@ -133,13 +133,13 @@ if [ "${WAV_COUNT}" -gt 0 ] ; then
         --only-personal || { rm -rf "${PERSONAL_FEATURES_DIR}" ; exit 1 ; }
     echo "✅ Personal features rebuilt successfully"
     echo
+    POST_PERSONAL_TS=$EPOCHSECONDS
 else
     echo "ℹ️  No personal samples found in ${PERSONAL_SAMPLES_DIR}"
     echo "   Training will proceed with generated samples only"
     echo
+    POST_PERSONAL_TS=$POST_AUGMENT_TS
 fi
-
-POST_PERSONAL_TS=$EPOCHSECONDS
 
 # -----------------------------------------------------------------------------
 
