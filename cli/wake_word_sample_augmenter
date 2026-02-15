@@ -19,6 +19,9 @@ parser.add_argument("--output-dir", type=str, help="Wake word output dir. Defaul
 parser.add_argument("--personal-dir", type=str, help="Personal WAV dir. Default: <data-dir>/personal_samples", required=False)
 parser.add_argument("--personal-output-dir", type=str, help="Personal features output dir. Default: <data-dir>/work/personal_augmented_features", required=False)
 
+# Processing control flags
+parser.add_argument("--only-personal", action="store_true", help="Process only personal samples, skip generated wake word augmentation", required=False, default=False)
+
 # Dataset dirs
 parser.add_argument("--mit-rirs-16k-dir", type=str, help="MIT RIR input directory. Default: <data-dir>/training_datasets/mit_rirs_16k", required=False)
 parser.add_argument("--fma-16k-dir", type=str, help="FMA input directory. Default: <data-dir>/training_datasets/fma_16k", required=False)
@@ -78,7 +81,11 @@ def validate_directories(paths):
             return False
     return True
 
-required = [work_dir, args.input_dir, args.mit_rirs_16k_dir, args.fma_16k_dir, args.audioset_16k_dir]
+# When --only-personal is used, input_dir for generated samples is not required
+required = [work_dir, args.mit_rirs_16k_dir, args.fma_16k_dir, args.audioset_16k_dir]
+if not args.only_personal:
+    required.append(args.input_dir)
+
 if not validate_directories(required):
     parser.print_help()
     sys.exit(1)
@@ -236,7 +243,10 @@ def generate_feature_set(input_wav_dir: str, out_root_dir: str, label: str):
     return True
 
 # Wake word generated/TTS features (existing behavior)
-generate_feature_set(args.input_dir, args.output_dir, "generated")
+if not args.only_personal:
+    generate_feature_set(args.input_dir, args.output_dir, "generated")
+else:
+    print("ℹ️  Skipping generated wake word augmentation (--only-personal flag is set)")
 
 # Personal features (NEW)
 generate_feature_set(args.personal_dir, args.personal_output_dir, "personal")

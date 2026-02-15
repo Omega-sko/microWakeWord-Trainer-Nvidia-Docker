@@ -110,6 +110,36 @@ fi
 
 POST_AUGMENT_TS=$EPOCHSECONDS
 
+# -----------------------------------------------------------------------------
+# Personal samples augmentation (Variant X)
+# -----------------------------------------------------------------------------
+# If at least one *.wav exists in personal_samples, always rebuild personal features
+# This ensures personal samples are deterministically included in training
+PERSONAL_SAMPLES_DIR="${DATA_DIR}/personal_samples"
+PERSONAL_FEATURES_DIR="${DATA_DIR}/work/personal_augmented_features"
+
+WAV_COUNT=$(find "${PERSONAL_SAMPLES_DIR}" -maxdepth 1 -type f -name "*.wav" 2>/dev/null | wc -l || echo 0)
+
+if [ "${WAV_COUNT}" -gt 0 ] ; then
+    echo "===== Personal samples detected: ${WAV_COUNT} WAV file(s) ====="
+    echo "   Rebuilding personal augmented features (always fresh)..."
+    rm -rf "${PERSONAL_FEATURES_DIR}" || :
+    mkdir -p "${PERSONAL_FEATURES_DIR}" || :
+    python -u "${CLIDIR}/wake_word_sample_augmenter" \
+        --data-dir="${DATA_DIR}" \
+        --only-personal || { rm -rf "${PERSONAL_FEATURES_DIR}" ; exit 1 ; }
+    echo "✅ Personal features rebuilt successfully"
+    echo
+else
+    echo "ℹ️  No personal samples found in ${PERSONAL_SAMPLES_DIR}"
+    echo "   Training will proceed with generated samples only"
+    echo
+fi
+
+POST_PERSONAL_TS=$EPOCHSECONDS
+
+# -----------------------------------------------------------------------------
+
 "${CLIDIR}/wake_word_sample_trainer" \
     --samples=${SAMPLES} \
     --training-steps=${TRAINING_STEPS} \
@@ -133,7 +163,8 @@ printf "%44s\n\n" "Training Summary"
 echo
 print_elapsed_time --no-separators "${START_TS}" "${POST_GEN_TS}" "Generate ${SAMPLES} samples, ${BATCH_SIZE}/batch"
 print_elapsed_time --no-separators "${POST_GEN_TS}" "${POST_AUGMENT_TS}" "Augment ${SAMPLES} samples"
-print_elapsed_time --no-separators "${POST_AUGMENT_TS}" "${END_TS}" "${TRAINING_STEPS} training steps"
+print_elapsed_time --no-separators "${POST_AUGMENT_TS}" "${POST_PERSONAL_TS}" "Personal samples augmentation"
+print_elapsed_time --no-separators "${POST_PERSONAL_TS}" "${END_TS}" "${TRAINING_STEPS} training steps"
 python -c $'msg="="*54 ; print(f"{msg:>80s}")'
 print_elapsed_time --no-separators "${START_TS}" "${END_TS}" "Total"
 python -c $'print(f"{\'=\' * 80}")'
