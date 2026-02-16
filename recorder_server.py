@@ -472,7 +472,7 @@ def start_session(payload: Dict[str, Any]):
     takes_per_speaker = int(payload.get("takes_per_speaker") or TAKES_PER_SPEAKER_DEFAULT)
 
     speakers_total = max(1, min(10, speakers_total))
-    takes_per_speaker = max(1, min(50, takes_per_speaker))
+    takes_per_speaker = max(1, min(100, takes_per_speaker))
 
     with STATE_LOCK:
         STATE["raw_phrase"] = raw
