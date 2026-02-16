@@ -3,7 +3,7 @@ name: Build and publish Docker image to GHCR
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
 
 permissions:
   contents: read
@@ -26,9 +26,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute tags
+        id: meta
+        run: |
+          IMAGE="ghcr.io/omega-sko/microwakeword"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "tags=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
+            echo "tags=${IMAGE}:dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${IMAGE}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/omega-sko/microwakeword:latest
+          tags: ${{ steps.meta.outputs.tags }}
