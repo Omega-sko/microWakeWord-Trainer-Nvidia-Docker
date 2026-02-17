@@ -40,6 +40,9 @@ COPY --chown=root:root cli/ /root/mww-scripts/cli/
 # Make all CLI scripts executable (avoids "Permission denied")
 RUN chmod -R a+x /root/mww-scripts/cli
 
+# Install Python modules
+RUN pip install --no-cache-dir -r /root/mww-scripts/requirements.txt
+
 # Static UI for recorder
 COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html
 
