@@ -48,8 +48,8 @@ elif [ -z "$WAKE_WORD_TITLE" ] ; then
     WAKE_WORD_TITLE="$WAKE_WORD"
 fi
 
-# shellcheck source=/dev/null
-source "${DATA_DIR}/.venv/bin/activate"
+# No longer need to activate /data/.venv - using system Python from NGC container
+# which has TensorFlow pre-installed with proper CUDA/PTX support for sm_120
 
 # --- WSL2 GPU visibility fix (venv sometimes doesn't inherit WSL driver path) ---
 # Keep a copy so we can restore/preserve on fallback if desired.

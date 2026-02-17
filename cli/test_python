@@ -6,7 +6,7 @@ TRAINING_STEPS=40000
 DATA_DIR=/data
 source "${PROGDIR}/shell.functions"
 
-source "${DATA_DIR}/.venv/bin/activate"
+# No longer need to activate /data/.venv - using system Python from NGC container
 
 export TF_CPP_MIN_LOG_LEVEL=9
 export GLOG_minloglevel=2
@@ -119,11 +119,22 @@ EOF
 
 echo -e "===== Testing piper-sample-generator =====\n"
 
-./tools/piper-sample-generator/generate_samples.py --help &>/dev/null && {
-    echo "piper-sample-generator available"
-} || {
+# Check both old location (if using /data venv) and new location (system install)
+if [ -x "./tools/piper-sample-generator/generate_samples.py" ]; then
+    ./tools/piper-sample-generator/generate_samples.py --help &>/dev/null && {
+        echo "piper-sample-generator available"
+    } || {
+        echo "piper-sample-generator not available"
+    }
+elif [ -x "/root/mww-tools/piper-sample-generator/generate_samples.py" ]; then
+    /root/mww-tools/piper-sample-generator/generate_samples.py --help &>/dev/null && {
+        echo "piper-sample-generator available"
+    } || {
+        echo "piper-sample-generator not available"
+    }
+else
     echo "piper-sample-generator not available"
-}
+fi
 
 echo
 echo -e "\n===== Python Environment Testing Complete =====\n"

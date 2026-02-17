@@ -7,6 +7,8 @@ Train **microWakeWord** detection models using a simple **web-based recorder + t
 
 No Jupyter notebooks required. No manual cell execution. Just record your voice (optional) and train.
 
+**Built on NVIDIA TensorFlow NGC Container** – Full GPU support for modern NVIDIA GPUs including Compute Capability 12.0+ (Blackwell/sm_120).
+
 ---
 
 <img width="100" height="44" alt="unraid_logo_black-339076895" src="https://github.com/user-attachments/assets/87351bed-3321-4a43-924f-fecf2e4e700f" />
@@ -158,6 +160,38 @@ Then restart the container.
 - Remove cached datasets
 - Require re-downloading training data
 - Delete trained models
+
+---
+
+## 🖥️ Technical Details
+
+### Base Image
+
+This container is built on **NVIDIA TensorFlow NGC Container** (`nvcr.io/nvidia/tensorflow:25.02-tf2-py3`), which includes:
+- **TensorFlow 2.18** with CUDA 12.6
+- **PTX 8.7+** support for modern GPU architectures
+- Full support for **Compute Capability 12.0+** (Blackwell/sm_120)
+- Pre-configured CUDA, cuDNN, and TensorRT
+
+### GPU Support
+
+Training automatically uses GPU if available. The container supports:
+- **Modern NVIDIA GPUs**: Compute Capability 12.0+ (Blackwell), 9.0+ (Hopper), 8.x (Ampere), 7.x (Volta/Turing)
+- **Automatic CPU Fallback**: If GPU training fails (OOM, driver issues), the system automatically retries on CPU
+
+### Force CPU Training
+
+To force CPU-only training (disable GPU), run the container with:
+
+```bash
+docker run -d \
+  -e CUDA_VISIBLE_DEVICES="" \
+  -p 8888:8888 \
+  -v $(pwd):/data \
+  ghcr.io/tatertotterson/microwakeword:latest
+```
+
+The `CUDA_VISIBLE_DEVICES=""` environment variable disables GPU access.
 
 ---
 

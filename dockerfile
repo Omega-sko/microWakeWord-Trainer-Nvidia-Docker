@@ -1,12 +1,12 @@
-# Base
-FROM ubuntu:24.04
+# Base: NVIDIA TensorFlow NGC container with CUDA 12.6 and TensorFlow 2.18
+# This image includes TensorFlow built with PTX 8.7+ which supports sm_120 (Compute Capability 12.0)
+FROM nvcr.io/nvidia/tensorflow:25.02-tf2-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System deps
+# System deps (NGC container already has python3, git, etc. but we add any missing utilities)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 python3.12-venv python3.12-dev python3-pip python-is-python3 \
-    git wget curl unzip ca-certificates nano less \
+    nano less \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /data
 
@@ -15,23 +15,6 @@ EXPOSE 8789
 
 # Script root
 WORKDIR /root/mww-scripts
-
-##### custom add
-# Install conda + CUDA 12.5.0
-RUN apt-get update && apt-get install -y --no-install-recommends wget && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.5.0" cuda && \
-    rm Miniconda3-latest-Linux-x86_64.sh
-
-# Set LD_LIBRARY_PATH globally
-ENV LD_LIBRARY_PATH=/opt/conda/lib
-
-# resolve minor warning when entering bash ...
-RUN apt-get update && apt-get install -y libtinfo6 && \
-    rm -f /opt/conda/lib/libtinfo.so.6 /opt/conda/lib/libtinfo.so.6.* 2>/dev/null || true
 
 # Bash environment
 COPY --chown=root:root --chmod=0755 .bashrc /root/
@@ -52,6 +35,47 @@ RUN chmod -R a+x /root/mww-scripts/cli
 
 # Static UI for recorder
 COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html
+
+# Install training dependencies in the system Python
+# NGC container already has TensorFlow, but we need additional packages
+RUN pip install --no-cache-dir \
+    numpy==1.26.4 \
+    scipy==1.12.0 \
+    librosa==0.10.2.post1 \
+    soundfile==0.12.1 \
+    tqdm==4.67.1 \
+    scikit-learn==1.6.0 \
+    numba==0.63.1 \
+    PyYAML==6.0.3 \
+    ai_edge_litert \
+    tensorboard \
+    tensorboard-data-server \
+    "keras==3.12.0" && \
+    pip install --no-cache-dir \
+    "torch==2.9.1" \
+    "torchaudio==2.9.1" --index-url https://download.pytorch.org/whl/cu126 && \
+    pip install --no-cache-dir "onnxruntime-gpu>=1.16.0"
+
+# Clone and install microwakeword and piper-sample-generator
+RUN mkdir -p /root/mww-tools && \
+    cd /root/mww-tools && \
+    git clone https://github.com/Omega-sko/micro-wake-word microwakeword && \
+    cd microwakeword && \
+    # Patch setup.py to not reinstall TensorFlow (NGC container already has it)
+    sed -i 's/"tensorflow>=2.16"/"tensorflow"/g' setup.py && \
+    pip install --no-cache-dir -e . && \
+    cd /root/mww-tools && \
+    git clone https://github.com/rhasspy/piper-sample-generator && \
+    cd piper-sample-generator && \
+    pip install --no-cache-dir -e . && \
+    mkdir -p models && \
+    cd models && \
+    curl -sfL https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt -o en_US-libritts_r-medium.pt && \
+    curl -sfL https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt.json -o en_US-libritts_r-medium.pt.json
+
+# Set environment variables for training
+ENV PIPER_SAMPLE_GENERATOR_DIR=/root/mww-tools/piper-sample-generator
+ENV MICROWAKEWORD_DIR=/root/mww-tools/microwakeword
 
 # recorder server
 CMD ["/bin/bash", "-lc", "/root/mww-scripts/run_recorder.sh"]
