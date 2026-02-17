@@ -107,9 +107,8 @@ if ! mountpoint -q /data ; then
     =======================================================
     WARNING: The /data directory is NOT mounted.
     Running the training process without /data mounted
-    could add over 140Gb of python packages and training
-    files to this container's storage which is probably
-    NOT what you want.
+    could add over 140Gb of training datasets to this 
+    container's storage which is probably NOT what you want.
 
     You should remove this container and re-create it with
     a 'docker run' option like '-v <host_work_dir>:/data'
@@ -119,17 +118,10 @@ if ! mountpoint -q /data ; then
 EOF
 fi
 
+# Note: This container uses system Python with TensorFlow pre-installed from NGC.
+# The /data/.venv is no longer required for training.
+# If you need a custom venv for other purposes, you can still create one manually.
 if [ -d /data/.venv ]; then
-    . /data/.venv/bin/activate
-else
-    cat <<-EOF >&2
-    =======================================================
-    WARNING: A python virtual environment wasn't found
-    at /data/.venv.  You'll need to run 'setup_python_venv'
-    before you'll be able to use this container for
-    training.
-    =======================================================
-EOF
-
+    echo "ℹ️  Found /data/.venv - you can activate it with 'source /data/.venv/bin/activate' if needed"
+    echo "   (Training uses system Python from NGC container, not /data/.venv)"
 fi
-alias venv='[ -d /data/.venv ] && source /data/.venv/bin/activate || echo "/data/.venv does not exist yet"'
