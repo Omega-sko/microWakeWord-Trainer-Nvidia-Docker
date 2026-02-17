@@ -71,7 +71,8 @@ RUN mkdir -p /root/mww-tools && \
     mkdir -p models && \
     cd models && \
     curl -sfL https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt -o en_US-libritts_r-medium.pt && \
-    curl -sfL https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt.json -o en_US-libritts_r-medium.pt.json
+    # JSON file is not available in releases, fetch from repo pinned to commit ded9350 (corresponds to v2.0.0)
+    curl -sfL https://raw.githubusercontent.com/rhasspy/piper-sample-generator/ded9350eaff558af07f312464ac71baf7de834df/models/en_US-libritts_r-medium.pt.json -o en_US-libritts_r-medium.pt.json
 
 # Set environment variables for training
 ENV PIPER_SAMPLE_GENERATOR_DIR=/root/mww-tools/piper-sample-generator
