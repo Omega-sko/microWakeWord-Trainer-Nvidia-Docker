@@ -55,9 +55,9 @@ export DATA_DIR="${DATA_DIR}"
 export STATIC_DIR="${ROOTDIR}/static"
 export PERSONAL_DIR="${DATA_DIR}/personal_samples"
 
-# IMPORTANT: leave training venv creation to /api/train inside recorder_server.py
-# but still set TRAIN_CMD so the server knows how to invoke training once ready
-export TRAIN_CMD="source '${DATA_DIR}/.venv/bin/activate' && train_wake_word --data-dir='${DATA_DIR}'"
+# IMPORTANT: Training now uses system Python (from NGC container) not /data/.venv
+# The NGC container has TensorFlow pre-installed with proper CUDA/PTX support for sm_120
+export TRAIN_CMD="train_wake_word --data-dir='${DATA_DIR}'"
 
 echo "Launching uvicorn on ${HOST}:${PORT}"
 cd "${ROOTDIR}"

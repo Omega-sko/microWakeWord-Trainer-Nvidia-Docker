@@ -41,7 +41,7 @@ get_filecounts filecounts "${AUDIO_FILECOUNT}"
 echo "===== Checking MIT_RIR ====="
 
 converter() {
-    source ${DATA_DIR}/.venv/bin/activate
+    # No longer need to activate /data/.venv - using system Python from NGC container
     python - "${AUDIO_DIR}" "${AUDIO16K_DIR}" <<-EOF
 import os, sys, subprocess, scipy.io.wavfile, numpy as np
 from pathlib import Path

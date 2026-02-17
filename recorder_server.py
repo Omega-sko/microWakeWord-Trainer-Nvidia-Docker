@@ -32,7 +32,7 @@ DATASET_CLEANUP_INTERMEDIATE = os.environ.get("REC_DATASET_CLEANUP_INTERMEDIATE_
 
 TRAIN_CMD = os.environ.get(
     "TRAIN_CMD",
-    f"source '{DATA_DIR}/.venv/bin/activate' && train_wake_word --data-dir '{DATA_DIR}'"
+    f"train_wake_word --data-dir '{DATA_DIR}'"
 )
 
 TAKES_PER_SPEAKER_DEFAULT = int(os.environ.get("REC_TAKES_PER_SPEAKER", "10"))
@@ -166,27 +166,12 @@ def _run_streamed(
 
 
 def _ensure_training_venv(log_path: Path) -> None:
-    activate = DATA_DIR / ".venv" / "bin" / "activate"
-    if activate.exists():
-        _append_train_log("✅ Training venv found (skipping setup_python_venv)")
-        return
-
-    setup = CLI_DIR / "setup_python_venv"
-    if not setup.exists():
-        raise RuntimeError(f"Missing setup_python_venv at: {setup}")
-
-    rc = _run_streamed(
-        ["bash", "-lc", f"cd '{DATA_DIR}' && '{setup}' --data-dir='{DATA_DIR}'"],
-        cwd=DATA_DIR,
-        log_path=log_path,
-        header="===== Ensuring Python venv (/data/.venv) =====",
-    )
-
-    if rc != 0:
-        raise RuntimeError(f"setup_python_venv failed (exit_code={rc})")
-
-    if not activate.exists():
-        raise RuntimeError(f"setup_python_venv finished, but {activate} is still missing")
+    """
+    Training venv is no longer required - TensorFlow is built into the NGC container.
+    This function now just logs that we're using the system Python.
+    """
+    _append_train_log("✅ Using system Python/TensorFlow from NGC container (no venv setup needed)")
+    return
 
 
 def _ensure_training_datasets(log_path: Path) -> None:

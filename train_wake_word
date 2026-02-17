@@ -46,8 +46,8 @@ EOF
     exit 1
 fi
 
-# shellcheck source=/dev/null
-source "${DATA_DIR}/.venv/bin/activate"
+# No longer need to activate /data/.venv - using system Python from NGC container
+# which has TensorFlow pre-installed with proper CUDA/PTX support for sm_120
 
 cd "${DATA_DIR}"
 mkdir -p "${DATA_DIR}/work" || :
