@@ -30,7 +30,13 @@ mkdir -p "${DATA_DIR}"
 # -----------------------------
 if [[ ! -x "${PY}" ]]; then
   echo "Creating recorder venv: ${VENV_DIR}"
-  python3 -m venv "${VENV_DIR}"
+  # Use system python explicitly to avoid PATH interference
+  if ! /usr/bin/python3 -m venv "${VENV_DIR}" 2>&1; then
+    echo "ERROR: Failed to create venv at ${VENV_DIR}"
+    echo "This typically means python3-venv or ensurepip is not installed."
+    echo "Please rebuild the Docker image to include python3-venv."
+    exit 1
+  fi
 fi
 
 # shellcheck disable=SC1091

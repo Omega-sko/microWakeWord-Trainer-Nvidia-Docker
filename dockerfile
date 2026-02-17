@@ -5,10 +5,17 @@ FROM nvcr.io/nvidia/tensorflow:25.02-tf2-py3
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System deps (NGC container already has python3, git, etc. but we add any missing utilities)
+# Install python3-venv to ensure venv/ensurepip support on Ubuntu 24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nano less \
+    nano less python3-venv \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /data
+
+# Build-time verification: ensure venv creation and ensurepip work
+RUN python3 -c "import ensurepip" && \
+    python3 -m venv /tmp/test-venv && \
+    rm -rf /tmp/test-venv && \
+    echo "[OK] venv and ensurepip verified"
 
 # Recorder port
 EXPOSE 8789
