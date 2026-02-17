@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -c "import ensurepip" && \
     python3 -m venv /tmp/test-venv && \
     rm -rf /tmp/test-venv && \
-    echo "✓ venv and ensurepip verified"
+    echo "[OK] venv and ensurepip verified"
 
 # Recorder port
 EXPOSE 8789
