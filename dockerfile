@@ -61,6 +61,8 @@ RUN mkdir -p /root/mww-tools && \
     cd /root/mww-tools && \
     git clone https://github.com/Omega-sko/micro-wake-word microwakeword && \
     cd microwakeword && \
+    # Patch setup.py to not reinstall TensorFlow (NGC container already has it)
+    sed -i 's/"tensorflow>=2.16"/"tensorflow"/g' setup.py && \
     pip install --no-cache-dir -e . && \
     cd /root/mww-tools && \
     git clone https://github.com/rhasspy/piper-sample-generator && \
