@@ -50,8 +50,9 @@ COPY --chown=root:root cli/ /root/mww-scripts/cli/
 # Make all CLI scripts executable (avoids "Permission denied")
 RUN chmod -R a+x /root/mww-scripts/cli
 
-# Create symlink for train_wake_word in /usr/local/bin for system-wide availability
-RUN ln -s /root/mww-scripts/train_wake_word /usr/local/bin/train_wake_word
+# Ensure train_wake_word is executable and create symlink in /usr/local/bin for system-wide availability
+RUN chmod +x /root/mww-scripts/train_wake_word && \
+    ln -s /root/mww-scripts/train_wake_word /usr/local/bin/train_wake_word
 
 # Static UI for recorder
 COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html
