@@ -63,8 +63,8 @@ RUN pip install --no-cache-dir \
     tensorboard-data-server \
     "keras==3.12.0" && \
     pip install --no-cache-dir \
-    "torch==2.9.1" \
-    "torchaudio==2.9.1" --index-url https://download.pytorch.org/whl/cu126 && \
+    torch --index-url https://download.pytorch.org/whl/nightly/cu128 && \
+    pip install --no-cache-dir torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128 && \
     pip install --no-cache-dir "onnxruntime-gpu>=1.16.0"
 
 # Clone and install microwakeword and piper-sample-generator
