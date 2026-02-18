@@ -65,21 +65,27 @@ echo
 START_TS=$EPOCHSECONDS
 
 # -----------------------------------------------------------------------------
-# TensorFlow / XLA environment (known-good, portable)
+# TensorFlow / XLA environment (RTX 50xx / Blackwell compatibility)
 # -----------------------------------------------------------------------------
-# NOTE: RTX 50xx Series GPUs (Compute Capability 12.0) may experience training
-# failures due to missing TensorFlow CUDA kernels for sm_120. The training
-# pipeline includes automatic CPU fallback. See README.md "Known Issues" for
-# details on CUDA_ERROR_INVALID_HANDLE errors.
+# RTX 50xx GPUs (Compute Capability 12.0) require special XLA flags to avoid
+# PTX JIT compilation failures. These settings are applied globally to ensure
+# compatibility across all GPU models while maintaining CPU fallback capability.
 # -----------------------------------------------------------------------------
 export TF_CPP_MIN_LOG_LEVEL=9
 export TF_FORCE_GPU_ALLOW_GROWTH=true
 export TF_GPU_ALLOCATOR=cuda_malloc_async
 
-# Hard-set TF_XLA_FLAGS to ONLY what we know this build supports.
-# Do NOT append user environment flags (can cause hard failures).
-export TF_XLA_FLAGS="--tf_xla_auto_jit=0"
-unset XLA_FLAGS
+# Disable XLA auto JIT to avoid PTX compilation failures on newer GPUs
+# Use 'off' instead of '0' for better compatibility
+export TF_XLA_FLAGS="--tf_xla_auto_jit=off"
+
+# Apply XLA PTX fallback workaround for all systems (not just WSL2)
+# This helps RTX 50xx series GPUs handle missing CUDA kernel binaries
+if [ -z "${XLA_FLAGS:-}" ]; then
+  export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+fi
+
+unset XLA_FLAGS_ORIG  # Clean up any previous setting
 
 export NVIDIA_TF32_OVERRIDE=1
 export TF_CUDNN_WORKSPACE_LIMIT_IN_MB=512

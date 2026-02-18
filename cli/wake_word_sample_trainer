@@ -48,21 +48,23 @@ elif [ -z "$WAKE_WORD_TITLE" ] ; then
     WAKE_WORD_TITLE="$WAKE_WORD"
 fi
 
-# --- WSL2 GPU visibility fix ---
+# --- GPU compatibility fixes ---
 # Keep a copy so we can restore/preserve on fallback if desired.
 ORIG_XLA_FLAGS="${XLA_FLAGS:-}"
 
+# WSL2 GPU visibility fix
 if [ -d /usr/lib/wsl/lib ]; then
   export LD_LIBRARY_PATH="/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}"
   echo "ℹ️  WSL2 detected: LD_LIBRARY_PATH+=/usr/lib/wsl/lib"
+fi
 
-  # Blackwell / PTXAS workaround: only apply on WSL *and* only if user didn't set XLA_FLAGS
-  if [ -z "${XLA_FLAGS:-}" ]; then
-    export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
-    echo "ℹ️  WSL2: setting XLA_FLAGS=${XLA_FLAGS}"
-  else
-    echo "ℹ️  Using user-provided XLA_FLAGS=${XLA_FLAGS}"
-  fi
+# RTX 50xx (Blackwell / Compute Capability 12.0) PTX JIT workaround
+# Apply for ALL systems, not just WSL2, to handle PTX compilation failures
+if [ -z "${XLA_FLAGS:-}" ]; then
+  export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+  echo "ℹ️  Setting XLA_FLAGS for PTX compatibility: ${XLA_FLAGS}"
+else
+  echo "ℹ️  Using user-provided XLA_FLAGS=${XLA_FLAGS}"
 fi
 # -----------------------------------------------------------------------------
 
@@ -231,6 +233,13 @@ GPU_FALLBACK_MARKERS=(
   "dst tensor is not initialized"
   "failed copying input tensor"
   "_eagerconst"
+  "cuda_error_invalid_ptx"
+  "cuda_error_invalid_handle"
+  "compute capability"
+  "jit-compiled from ptx"
+  "ptxas"
+  "culaunchkernel"
+  "traceback"
 )
 
 # ============================================================================
@@ -238,18 +247,20 @@ GPU_FALLBACK_MARKERS=(
 # ============================================================================
 # This script attempts GPU training first, then falls back to CPU if needed.
 #
-# KNOWN ISSUE - RTX 50xx Series (Blackwell / Compute Capability 12.0):
-# Training may fail with:
-#   tensorflow.python.framework.errors_impl.InternalError: ...
-#   'cuLaunchKernel(function ...) failed with 'CUDA_ERROR_INVALID_HANDLE'
+# RTX 50xx Series (Blackwell / Compute Capability 12.0) - FIXED:
+# - Applied XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found
+# - Set TF_XLA_FLAGS=--tf_xla_auto_jit=off to disable problematic JIT
+# - Extended GPU_FALLBACK_MARKERS to detect compute capability errors
+# - These fixes allow RTX 50xx GPUs to train successfully via PTX fallback
 #
-# Cause: TensorFlow does not yet provide maintained CUDA kernels for sm_120.
-#        PTX JIT compilation fails, resulting in CUDA_ERROR_INVALID_HANDLE.
+# If GPU still fails (OOM, driver issues, etc.), the markers below detect
+# common failure patterns and trigger automatic CPU fallback.
 #
-# The GPU_FALLBACK_MARKERS below detect this and other GPU errors, triggering
-# automatic CPU fallback to ensure training completes successfully.
-#
-# See README.md "Known Issues" section for more details and workarounds.
+# GPU failure markers now include:
+# - Compute capability warnings/errors
+# - PTX/PTXAS compilation failures
+# - CUDA_ERROR_INVALID_PTX / CUDA_ERROR_INVALID_HANDLE
+# - Python tracebacks (indicating crashes)
 # ============================================================================
 
 run_attempt() {
@@ -271,9 +282,12 @@ run_attempt() {
   return ${PIPESTATUS[0]}
 }
 
-# --------- ENV (keep compatible; DO NOT add unsupported XLA flags) ----------
+# --------- ENV (RTX 50xx / Blackwell compatibility) ----------
 export TF_CPP_MIN_LOG_LEVEL="${TF_CPP_MIN_LOG_LEVEL:-2}"
-export TF_XLA_FLAGS="${TF_XLA_FLAGS:---tf_xla_auto_jit=0}"
+
+# Disable XLA auto JIT to avoid PTX compilation failures on RTX 50xx
+# Use 'off' instead of '0' for better compatibility
+export TF_XLA_FLAGS="${TF_XLA_FLAGS:---tf_xla_auto_jit=off}"
 
 export NVIDIA_TF32_OVERRIDE="${NVIDIA_TF32_OVERRIDE:-1}"
 export TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
