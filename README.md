@@ -7,7 +7,7 @@ Train **microWakeWord** detection models using a simple **web-based recorder + t
 
 No Jupyter notebooks required. No manual cell execution. Just record your voice (optional) and train.
 
-**Built on NVIDIA TensorFlow NGC Container** – Full GPU support for modern NVIDIA GPUs including Compute Capability 12.0+ (Blackwell/sm_120).
+**Built on Official TensorFlow 2.18.0 GPU Image** – Full GPU support for modern NVIDIA GPUs with CUDA and cuDNN libraries.
 
 ---
 
@@ -167,16 +167,16 @@ Then restart the container.
 
 ### Base Image
 
-This container is built on **NVIDIA TensorFlow NGC Container** (`nvcr.io/nvidia/tensorflow:25.02-tf2-py3`), which includes:
-- **TensorFlow 2.18** with CUDA 12.6
-- **PTX 8.7+** support for modern GPU architectures
-- Full support for **Compute Capability 12.0+** (Blackwell/sm_120)
-- Pre-configured CUDA, cuDNN, and TensorRT
+This container is built on the **Official TensorFlow 2.18.0 GPU Image** (`tensorflow/tensorflow:2.18.0-gpu`), which includes:
+- **TensorFlow 2.18.0** with GPU acceleration
+- **CUDA and cuDNN** libraries pre-configured for GPU training
+- **Python 3.11** with pip
+- Optimized for modern NVIDIA GPUs
 
 ### GPU Support
 
 Training automatically uses GPU if available. The container supports:
-- **Modern NVIDIA GPUs**: Compute Capability 12.0+ (Blackwell), 9.0+ (Hopper), 8.x (Ampere), 7.x (Volta/Turing)
+- **Modern NVIDIA GPUs**: Compute Capability 7.0+ (Volta, Turing, Ampere, Ada Lovelace, Hopper)
 - **Automatic CPU Fallback**: If GPU training fails (OOM, driver issues), the system automatically retries on CPU
 
 ### Force CPU Training

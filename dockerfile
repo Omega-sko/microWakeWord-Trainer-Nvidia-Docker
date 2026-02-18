@@ -1,12 +1,15 @@
-# Base: NVIDIA TensorFlow NGC container with CUDA 12.6 and TensorFlow 2.18
-# This image includes TensorFlow built with PTX 8.7+ which supports sm_120 (Compute Capability 12.0)
-FROM nvcr.io/nvidia/tensorflow:25.02-tf2-py3
+# Base: Official TensorFlow 2.18.0 GPU image with CUDA support
+# This image includes TensorFlow 2.18.0 with CUDA and cuDNN libraries for GPU acceleration
+FROM tensorflow/tensorflow:2.18.0-gpu
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System deps (NGC container already has python3, git, etc. but we add any missing utilities)
+# System dependencies
+# Official TensorFlow image has python3, curl, wget but missing git, nano, less
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nano less \
+    git \
+    nano \
+    less \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /data
 
@@ -48,7 +51,7 @@ RUN pip install --no-cache-dir \
 COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html
 
 # Install training dependencies in the system Python
-# NGC container already has TensorFlow, but we need additional packages
+# Official TensorFlow image already has TensorFlow 2.18.0, but we need additional packages
 RUN pip install --no-cache-dir \
     numpy==1.26.4 \
     scipy==1.12.0 \
@@ -72,7 +75,7 @@ RUN mkdir -p /root/mww-tools && \
     cd /root/mww-tools && \
     git clone https://github.com/Omega-sko/micro-wake-word microwakeword && \
     cd microwakeword && \
-    # Patch setup.py to not reinstall TensorFlow (NGC container already has it)
+    # Patch setup.py to not reinstall TensorFlow (official image already has it)
     sed -i 's/"tensorflow>=2.16"/"tensorflow"/g' setup.py && \
     pip install --no-cache-dir -e . && \
     cd /root/mww-tools && \

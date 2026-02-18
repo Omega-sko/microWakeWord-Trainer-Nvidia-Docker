@@ -34,8 +34,8 @@ export DATA_DIR="${DATA_DIR}"
 export STATIC_DIR="${ROOTDIR}/static"
 export PERSONAL_DIR="${DATA_DIR}/personal_samples"
 
-# IMPORTANT: Training uses system Python (from NGC container)
-# The NGC container has TensorFlow pre-installed with proper CUDA/PTX support
+# IMPORTANT: Training uses system Python (from official TensorFlow image)
+# The official TensorFlow image has TensorFlow 2.18.0 pre-installed with CUDA/cuDNN support
 export TRAIN_CMD="train_wake_word --data-dir='${DATA_DIR}'"
 
 echo "Launching uvicorn on ${HOST}:${PORT}"
