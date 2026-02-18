@@ -37,6 +37,8 @@ RUN chmod -R a+x /root/mww-scripts/cli
 RUN pip install --no-cache-dir -r /root/mww-scripts/requirements.txt
 
 # Install recorder server dependencies in system Python
+# Versions are pinned for reproducibility. Update these as needed.
+# Previously: REC_FASTAPI_VERSION, REC_UVICORN_VERSION, REC_PY_MULTIPART_VERSION env vars
 RUN pip install --no-cache-dir \
     "fastapi==0.115.6" \
     "uvicorn[standard]==0.30.6" \
