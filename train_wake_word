@@ -76,8 +76,8 @@ export TF_FORCE_GPU_ALLOW_GROWTH=true
 export TF_GPU_ALLOCATOR=cuda_malloc_async
 
 # Disable XLA auto JIT to avoid PTX compilation failures on newer GPUs
-# Use 'off' instead of '0' for better compatibility
-export TF_XLA_FLAGS="--tf_xla_auto_jit=off"
+# Use '0' for TensorFlow XLA flag compatibility
+export TF_XLA_FLAGS="--tf_xla_auto_jit=0"
 
 # Apply XLA PTX fallback workaround for all systems (not just WSL2)
 # This helps RTX 50xx series GPUs handle missing CUDA kernel binaries

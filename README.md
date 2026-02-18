@@ -221,7 +221,7 @@ RTX 50xx GPUs (including your RTX 5070 Ti) will train on GPU by default. The fix
 
 **What we do automatically:**
 1. **XLA PTX Fallback**: Set `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` to enable driver-side PTX compilation
-2. **Disable Auto JIT**: Set `TF_XLA_FLAGS=--tf_xla_auto_jit=off` to avoid XLA JIT compilation issues
+2. **Disable Auto JIT**: Set `TF_XLA_FLAGS=--tf_xla_auto_jit=0` to avoid XLA JIT compilation issues
 3. **CPU Fallback**: If GPU training still fails, automatic detection triggers CPU-only training
 4. **Extended Error Detection**: GPU failure markers now detect compute capability errors, PTX issues, and traceback failures
 
