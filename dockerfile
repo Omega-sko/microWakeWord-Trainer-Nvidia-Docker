@@ -77,6 +77,15 @@ RUN mkdir -p /root/mww-tools && \
     cd microwakeword && \
     # Patch setup.py to not reinstall TensorFlow (official image already has it)
     sed -i 's/"tensorflow>=2.16"/"tensorflow"/g' setup.py && \
+    # Patch train.py to handle both Tensor and numpy array from model.evaluate()
+    # Fix line 73: test_set_fp = result["fp"].numpy()
+    sed -i '73s/.*/    fp = result["fp"]; test_set_fp = fp.numpy() if hasattr(fp, "numpy") else fp/' microwakeword/train.py && \
+    # Fix line 104: all_true_positives = ambient_predictions["tp"].numpy()
+    sed -i '104s/.*/        tp = ambient_predictions["tp"]; all_true_positives = tp.numpy() if hasattr(tp, "numpy") else tp/' microwakeword/train.py && \
+    # Fix line 105: ambient_false_positives = ambient_predictions["fp"].numpy() - test_set_fp
+    sed -i '105s/.*/        fp = ambient_predictions["fp"]; fp_val = fp.numpy() if hasattr(fp, "numpy") else fp; ambient_false_positives = fp_val - test_set_fp/' microwakeword/train.py && \
+    # Fix line 106: all_false_negatives = ambient_predictions["fn"].numpy()
+    sed -i '106s/.*/        fn = ambient_predictions["fn"]; all_false_negatives = fn.numpy() if hasattr(fn, "numpy") else fn/' microwakeword/train.py && \
     pip install --no-cache-dir -e . && \
     cd /root/mww-tools && \
     git clone https://github.com/rhasspy/piper-sample-generator && \
@@ -96,7 +105,8 @@ ENV MICROWAKEWORD_DIR=/root/mww-tools/microwakeword
 RUN ln -s /root/mww-scripts/train_wake_word /usr/local/bin/train_wake_word && \
     ln -s /root/mww-scripts/cli/wake_word_sample_trainer /usr/local/bin/wake_word_sample_trainer && \
     ln -s /root/mww-scripts/cli/wake_word_sample_generator /usr/local/bin/wake_word_sample_generator && \
-    ln -s /root/mww-scripts/cli/wake_word_sample_augmenter /usr/local/bin/wake_word_sample_augmenter
+    ln -s /root/mww-scripts/cli/wake_word_sample_augmenter /usr/local/bin/wake_word_sample_augmenter && \
+    ln -s /root/mww-scripts/cli/test_training_metrics /usr/local/bin/test_training_metrics
 
 # recorder server
 CMD ["/bin/bash", "-lc", "/root/mww-scripts/run_recorder.sh"]

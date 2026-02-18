@@ -202,6 +202,33 @@ The `CUDA_VISIBLE_DEVICES=""` environment variable disables GPU access.
 
 ---
 
+## ✅ Compatibility Fixes
+
+### CPU Training - TensorFlow/Keras Compatibility
+
+**Issue**: Training on CPU crashes with `AttributeError: 'numpy.ndarray' object has no attribute 'numpy'`
+
+**Status**: ✅ **FIXED** - This repository includes automatic patches for microwakeword training code.
+
+**What we fixed:**
+- Modern TensorFlow/Keras (v2.18.0+) returns numpy arrays directly from `model.evaluate(..., return_dict=True)` on CPU
+- The upstream microwakeword code calls `.numpy()` on these already-materialized arrays, causing AttributeError
+- We apply build-time patches to handle both Tensor objects (with `.numpy()` method) and plain numpy arrays
+
+**Technical Details:**
+- Patched lines in `/root/mww-tools/microwakeword/microwakeword/train.py`: 73, 104, 105, 106
+- Uses `hasattr()` check: `fp = result["fp"]; fp_val = fp.numpy() if hasattr(fp, "numpy") else fp`
+- Works with both GPU (Tensor) and CPU (numpy array) execution modes
+- A sanity check script is available: `test_training_metrics` (installed in container)
+
+**Validation:**
+Run the sanity check inside the container:
+```bash
+test_training_metrics
+```
+
+---
+
 ## ⚠️ Known Issues
 
 ### RTX 50xx Series (Blackwell Architecture) - TensorFlow CUDA Compatibility
