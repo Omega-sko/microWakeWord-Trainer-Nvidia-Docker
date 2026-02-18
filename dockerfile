@@ -88,5 +88,11 @@ RUN mkdir -p /root/mww-tools && \
 ENV PIPER_SAMPLE_GENERATOR_DIR=/root/mww-tools/piper-sample-generator
 ENV MICROWAKEWORD_DIR=/root/mww-tools/microwakeword
 
+# Create symlinks for CLI tools in /usr/local/bin for system-wide availability
+RUN ln -s /root/mww-scripts/train_wake_word /usr/local/bin/train_wake_word && \
+    ln -s /root/mww-scripts/cli/wake_word_sample_trainer /usr/local/bin/wake_word_sample_trainer && \
+    ln -s /root/mww-scripts/cli/wake_word_sample_generator /usr/local/bin/wake_word_sample_generator && \
+    ln -s /root/mww-scripts/cli/wake_word_sample_augmenter /usr/local/bin/wake_word_sample_augmenter
+
 # recorder server
 CMD ["/bin/bash", "-lc", "/root/mww-scripts/run_recorder.sh"]
