@@ -233,6 +233,25 @@ GPU_FALLBACK_MARKERS=(
   "_eagerconst"
 )
 
+# ============================================================================
+# GPU Fallback Logic
+# ============================================================================
+# This script attempts GPU training first, then falls back to CPU if needed.
+#
+# KNOWN ISSUE - RTX 50xx Series (Blackwell / Compute Capability 12.0):
+# Training may fail with:
+#   tensorflow.python.framework.errors_impl.InternalError: ...
+#   'cuLaunchKernel(function ...) failed with 'CUDA_ERROR_INVALID_HANDLE'
+#
+# Cause: TensorFlow does not yet provide maintained CUDA kernels for sm_120.
+#        PTX JIT compilation fails, resulting in CUDA_ERROR_INVALID_HANDLE.
+#
+# The GPU_FALLBACK_MARKERS below detect this and other GPU errors, triggering
+# automatic CPU fallback to ensure training completes successfully.
+#
+# See README.md "Known Issues" section for more details and workarounds.
+# ============================================================================
+
 run_attempt() {
   local label="$1"
   shift

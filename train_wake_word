@@ -67,6 +67,11 @@ START_TS=$EPOCHSECONDS
 # -----------------------------------------------------------------------------
 # TensorFlow / XLA environment (known-good, portable)
 # -----------------------------------------------------------------------------
+# NOTE: RTX 50xx Series GPUs (Compute Capability 12.0) may experience training
+# failures due to missing TensorFlow CUDA kernels for sm_120. The training
+# pipeline includes automatic CPU fallback. See README.md "Known Issues" for
+# details on CUDA_ERROR_INVALID_HANDLE errors.
+# -----------------------------------------------------------------------------
 export TF_CPP_MIN_LOG_LEVEL=9
 export TF_FORCE_GPU_ALLOW_GROWTH=true
 export TF_GPU_ALLOCATOR=cuda_malloc_async

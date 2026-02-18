@@ -196,6 +196,35 @@ The `CUDA_VISIBLE_DEVICES=""` environment variable disables GPU access.
 
 ---
 
+## ⚠️ Known Issues
+
+### RTX 50xx Series (Blackwell Architecture) - TensorFlow CUDA Error
+
+**Issue**: Training may fail on NVIDIA RTX 50xx series GPUs (Compute Capability 12.0) with the following error:
+
+```
+tensorflow.python.framework.errors_impl.InternalError: ...
+'cuLaunchKernel(function ...) failed with 'CUDA_ERROR_INVALID_HANDLE'
+[Op:Cast] name: ...
+```
+
+**Cause**: 
+- This error occurs due to missing or defective TensorFlow/JIT kernels for Compute Capability 12.0 (Ada/Blackwell RTX 50xx series GPUs)
+- Upstream TensorFlow does not yet provide maintained CUDA kernels for `sm_120` architecture
+- PTX JIT compilation fails, resulting in `InternalError` with `CUDA_ERROR_INVALID_HANDLE`
+- This issue persists even with the latest TensorFlow nightly builds
+
+**Workarounds**:
+1. **Use CPU Fallback**: The training scripts automatically detect GPU failures and fall back to CPU training
+2. **Force CPU Training**: Set `CUDA_VISIBLE_DEVICES=""` environment variable to skip GPU entirely
+3. **Wait for Upstream Fix**: Monitor TensorFlow release notes and GitHub issues for Blackwell architecture support
+
+**References**:
+- [TensorFlow GPU Support Documentation](https://www.tensorflow.org/install/gpu)
+- Known issue tracking: Search TensorFlow GitHub for "CUDA_ERROR_INVALID_HANDLE" and "Compute Capability 12.0"
+
+---
+
 ## 🙌 Credits
 
 Built on top of the excellent  
