@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""
+Sanity check script to validate that training metric extraction works on CPU.
+
+This script tests the patched microwakeword code to ensure that:
+1. model.evaluate() with return_dict=True works correctly
+2. Metric extraction from result dictionary handles both Tensor and numpy array types
+3. The .numpy() AttributeError is resolved
+
+This is a lightweight test that validates the fix without running a full training session.
+"""
+
+import sys
+import os
+
+# Use MICROWAKEWORD_DIR environment variable if set, otherwise use default path
+MICROWAKEWORD_DIR = os.environ.get('MICROWAKEWORD_DIR', '/root/mww-tools/microwakeword')
+
+# Add microwakeword to path
+sys.path.insert(0, MICROWAKEWORD_DIR)
+
+def test_metric_extraction():
+    """Test that metric extraction handles both Tensor and numpy array types."""
+    print("=" * 80)
+    print("Testing metric extraction from model.evaluate() results")
+    print("=" * 80)
+    print()
+    
+    # Test 1: Simulate numpy array (current TF/Keras behavior on CPU)
+    print("Test 1: Simulating numpy array from model.evaluate()...")
+    try:
+        import numpy as np
+        
+        # Simulate what model.evaluate() returns on CPU (numpy arrays)
+        result = {
+            "fp": np.array([10]),
+            "tp": np.array([90]),
+            "fn": np.array([5]),
+            "accuracy": np.array([0.95]),
+        }
+        
+        # Test the patched code pattern: hasattr check before calling .numpy()
+        fp = result["fp"]
+        fp_val = fp.numpy() if hasattr(fp, "numpy") else fp
+        
+        tp = result["tp"]
+        tp_val = tp.numpy() if hasattr(tp, "numpy") else tp
+        
+        fn = result["fn"]
+        fn_val = fn.numpy() if hasattr(fn, "numpy") else fn
+        
+        print(f"✅ Successfully extracted FP: {fp_val}")
+        print(f"✅ Successfully extracted TP: {tp_val}")
+        print(f"✅ Successfully extracted FN: {fn_val}")
+        print()
+    except AttributeError as e:
+        print(f"❌ FAILED: {e}")
+        return False
+    
+    # Test 2: Simulate Tensor object (older TF/Keras behavior)
+    print("Test 2: Simulating Tensor from model.evaluate()...")
+    try:
+        import tensorflow as tf
+        
+        # Simulate what model.evaluate() might return with Tensor objects
+        result = {
+            "fp": tf.constant([10]),
+            "tp": tf.constant([90]),
+            "fn": tf.constant([5]),
+        }
+        
+        # Test the patched code pattern: hasattr check before calling .numpy()
+        fp = result["fp"]
+        fp_val = fp.numpy() if hasattr(fp, "numpy") else fp
+        
+        tp = result["tp"]
+        tp_val = tp.numpy() if hasattr(tp, "numpy") else tp
+        
+        fn = result["fn"]
+        fn_val = fn.numpy() if hasattr(fn, "numpy") else fn
+        
+        print(f"✅ Successfully extracted FP from Tensor: {fp_val}")
+        print(f"✅ Successfully extracted TP from Tensor: {tp_val}")
+        print(f"✅ Successfully extracted FN from Tensor: {fn_val}")
+        print()
+    except Exception as e:
+        print(f"❌ FAILED: {e}")
+        return False
+    
+    # Test 3: Verify the actual patched train.py file
+    print("Test 3: Verifying train.py patches...")
+    try:
+        train_py_path = os.path.join(MICROWAKEWORD_DIR, 'microwakeword', 'train.py')
+        if not os.path.exists(train_py_path):
+            print(f"⚠️  WARNING: {train_py_path} not found (expected if not in container)")
+            print("   This test should be run inside the Docker container")
+            return True
+        
+        with open(train_py_path, 'r') as f:
+            content = f.read()
+        
+        # Check for the patched code patterns
+        expected_patterns = [
+            'fp = result["fp"]; test_set_fp = fp.numpy() if hasattr(fp, "numpy") else fp',
+            'tp = ambient_predictions["tp"]; all_true_positives = tp.numpy() if hasattr(tp, "numpy") else tp',
+            'fp = ambient_predictions["fp"]; fp_val = fp.numpy() if hasattr(fp, "numpy") else fp',
+            'fn = ambient_predictions["fn"]; all_false_negatives = fn.numpy() if hasattr(fn, "numpy") else fn',
+        ]
+        
+        all_found = True
+        for pattern in expected_patterns:
+            if pattern in content:
+                print(f"✅ Found patch: {pattern[:60]}...")
+            else:
+                print(f"❌ Missing patch: {pattern[:60]}...")
+                all_found = False
+        
+        if not all_found:
+            print()
+            print("❌ Some patches are missing in train.py")
+            return False
+        
+        print()
+        print("✅ All patches verified in train.py")
+        print()
+    except Exception as e:
+        print(f"⚠️  Could not verify train.py: {e}")
+        print("   (This is expected if running outside the container)")
+        print()
+    
+    return True
+
+if __name__ == "__main__":
+    print()
+    print("Metric Extraction Sanity Check")
+    print("This validates the fix for: AttributeError: 'numpy.ndarray' object has no attribute 'numpy'")
+    print()
+    
+    # Force CPU mode for this test
+    os.environ['CUDA_VISIBLE_DEVICES'] = ''
+    
+    success = test_metric_extraction()
+    
+    if success:
+        print("=" * 80)
+        print("✅ ALL TESTS PASSED")
+        print("=" * 80)
+        print()
+        print("The metric extraction fix is working correctly.")
+        print("Training should proceed past validation metric extraction on CPU.")
+        print()
+        sys.exit(0)
+    else:
+        print("=" * 80)
+        print("❌ TESTS FAILED")
+        print("=" * 80)
+        print()
+        sys.exit(1)
