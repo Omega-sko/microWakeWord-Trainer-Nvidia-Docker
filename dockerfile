@@ -5,17 +5,10 @@ FROM nvcr.io/nvidia/tensorflow:25.02-tf2-py3
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System deps (NGC container already has python3, git, etc. but we add any missing utilities)
-# Install python3-venv to ensure venv/ensurepip support on Ubuntu 24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nano less python3-venv \
+    nano less \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /data
-
-# Build-time verification: ensure venv creation and ensurepip work
-RUN python3 -c "import ensurepip" && \
-    python3 -m venv /tmp/test-venv && \
-    rm -rf /tmp/test-venv && \
-    echo "[OK] venv and ensurepip verified"
 
 # Recorder port
 EXPOSE 8789
@@ -42,6 +35,14 @@ RUN chmod -R a+x /root/mww-scripts/cli
 
 # Install Python modules
 RUN pip install --no-cache-dir -r /root/mww-scripts/requirements.txt
+
+# Install recorder server dependencies in system Python
+# Versions are pinned for reproducibility. Update these as needed.
+# Previously: REC_FASTAPI_VERSION, REC_UVICORN_VERSION, REC_PY_MULTIPART_VERSION env vars
+RUN pip install --no-cache-dir \
+    "fastapi==0.115.6" \
+    "uvicorn[standard]==0.30.6" \
+    "python-multipart==0.0.9"
 
 # Static UI for recorder
 COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html

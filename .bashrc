@@ -118,10 +118,6 @@ if ! mountpoint -q /data ; then
 EOF
 fi
 
-# Note: This container uses system Python with TensorFlow pre-installed from NGC.
-# The /data/.venv is no longer required for training.
-# If you need a custom venv for other purposes, you can still create one manually.
-if [ -d /data/.venv ]; then
-    echo "ℹ️  Found /data/.venv - you can activate it with 'source /data/.venv/bin/activate' if needed"
-    echo "   (Training uses system Python from NGC container, not /data/.venv)"
-fi
+# This container uses system Python with TensorFlow pre-installed from NGC.
+# All training scripts use the global Python environment from the Docker image.
+# No virtual environment setup is required.
