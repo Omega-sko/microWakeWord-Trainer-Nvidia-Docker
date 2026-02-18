@@ -178,7 +178,13 @@ This container is built on the **Official TensorFlow 2.18.0 GPU Image** (`tensor
 Training automatically uses GPU if available. The container supports:
 - **Modern NVIDIA GPUs**: Compute Capability 6.0+ (Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper)
   - TensorFlow 2.18.0 officially supports CUDA Compute Capability 6.0 and higher
+  - **RTX 50xx series** (5060, 5070, 5080, 5090) fully supported with automatic XLA PTX workarounds
 - **Automatic CPU Fallback**: If GPU training fails (OOM, driver issues), the system automatically retries on CPU
+
+**GPU Training is the Default:**
+- First attempt: GPU training with optimized settings
+- Second attempt: CPU fallback only if GPU fails
+- Your RTX 5070 Ti will be used by default for all training
 
 ### Force CPU Training
 
@@ -209,6 +215,9 @@ will be jit-compiled from PTX, which could take 30 minutes or longer.
 ```
 
 **Status**: ✅ **FIXED** - This repository includes automatic workarounds for RTX 50xx GPUs.
+
+**GPU Training is Enabled:**
+RTX 50xx GPUs (including your RTX 5070 Ti) will train on GPU by default. The fixes enable PTX JIT compilation, so your GPU remains the primary training device.
 
 **What we do automatically:**
 1. **XLA PTX Fallback**: Set `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` to enable driver-side PTX compilation
