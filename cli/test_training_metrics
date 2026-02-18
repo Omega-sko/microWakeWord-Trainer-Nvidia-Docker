@@ -13,8 +13,11 @@ This is a lightweight test that validates the fix without running a full trainin
 import sys
 import os
 
+# Use MICROWAKEWORD_DIR environment variable if set, otherwise use default path
+MICROWAKEWORD_DIR = os.environ.get('MICROWAKEWORD_DIR', '/root/mww-tools/microwakeword')
+
 # Add microwakeword to path
-sys.path.insert(0, '/root/mww-tools/microwakeword')
+sys.path.insert(0, MICROWAKEWORD_DIR)
 
 def test_metric_extraction():
     """Test that metric extraction handles both Tensor and numpy array types."""
@@ -87,7 +90,7 @@ def test_metric_extraction():
     # Test 3: Verify the actual patched train.py file
     print("Test 3: Verifying train.py patches...")
     try:
-        train_py_path = '/root/mww-tools/microwakeword/microwakeword/train.py'
+        train_py_path = os.path.join(MICROWAKEWORD_DIR, 'microwakeword', 'train.py')
         if not os.path.exists(train_py_path):
             print(f"⚠️  WARNING: {train_py_path} not found (expected if not in container)")
             print("   This test should be run inside the Docker container")

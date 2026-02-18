@@ -78,6 +78,8 @@ RUN mkdir -p /root/mww-tools && \
     # Patch setup.py to not reinstall TensorFlow (official image already has it)
     sed -i 's/"tensorflow>=2.16"/"tensorflow"/g' setup.py && \
     # Patch train.py to handle both Tensor and numpy array from model.evaluate()
+    # Note: Using line numbers is safe here because we clone a specific commit.
+    # The patches are applied immediately after cloning, ensuring line numbers match.
     # Fix line 73: test_set_fp = result["fp"].numpy()
     sed -i '73s/.*/    fp = result["fp"]; test_set_fp = fp.numpy() if hasattr(fp, "numpy") else fp/' microwakeword/train.py && \
     # Fix line 104: all_true_positives = ambient_predictions["tp"].numpy()
