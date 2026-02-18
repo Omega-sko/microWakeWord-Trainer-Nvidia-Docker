@@ -1,6 +1,6 @@
 # Base: Official TensorFlow 2.18.0 GPU image with CUDA support
 # This image includes TensorFlow 2.18.0 with CUDA and cuDNN libraries for GPU acceleration
-FROM tensorflow/tensorflow:2.18.0-gpu
+FROM tensorflow/tensorflow:nightly-gpu
 
 ENV DEBIAN_FRONTEND=noninteractive
 
