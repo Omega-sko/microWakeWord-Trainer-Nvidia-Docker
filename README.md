@@ -176,7 +176,8 @@ This container is built on the **Official TensorFlow 2.18.0 GPU Image** (`tensor
 ### GPU Support
 
 Training automatically uses GPU if available. The container supports:
-- **Modern NVIDIA GPUs**: Compute Capability 7.0+ (Volta, Turing, Ampere, Ada Lovelace, Hopper)
+- **Modern NVIDIA GPUs**: Compute Capability 6.0+ (Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper)
+  - TensorFlow 2.18.0 officially supports CUDA Compute Capability 6.0 and higher
 - **Automatic CPU Fallback**: If GPU training fails (OOM, driver issues), the system automatically retries on CPU
 
 ### Force CPU Training
