@@ -6,8 +6,6 @@ TRAINING_STEPS=40000
 DATA_DIR=/data
 source "${PROGDIR}/shell.functions"
 
-# No longer need to activate /data/.venv - using system Python from NGC container
-
 export TF_CPP_MIN_LOG_LEVEL=9
 export GLOG_minloglevel=2
 export GRPC_VERBOSITY="ERROR"
@@ -119,7 +117,7 @@ EOF
 
 echo -e "===== Testing piper-sample-generator =====\n"
 
-# Check both old location (if using /data venv) and new location (system install)
+# Check both old location and new location (system install)
 if [ -x "./tools/piper-sample-generator/generate_samples.py" ]; then
     ./tools/piper-sample-generator/generate_samples.py --help &>/dev/null && {
         echo "piper-sample-generator available"

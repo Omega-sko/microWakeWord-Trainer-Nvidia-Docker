@@ -46,9 +46,6 @@ EOF
     exit 1
 fi
 
-# No longer need to activate /data/.venv - using system Python from official TensorFlow image
-# which has TensorFlow 2.18.0 pre-installed with CUDA/cuDNN support
-
 cd "${DATA_DIR}"
 mkdir -p "${DATA_DIR}/work" || :
 

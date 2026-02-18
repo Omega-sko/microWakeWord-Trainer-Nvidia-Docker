@@ -117,7 +117,3 @@ if ! mountpoint -q /data ; then
     =======================================================
 EOF
 fi
-
-# This container uses system Python with TensorFlow pre-installed from official TensorFlow image.
-# All training scripts use the global Python environment from the Docker image.
-# No virtual environment setup is required.
