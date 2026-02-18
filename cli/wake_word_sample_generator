@@ -31,13 +31,11 @@ EOF
     exit 1
 fi
 
-# No longer need to activate /data/.venv - using system Python from NGC container
-
 WORK_DIR="${DATA_DIR}/work"
 mkdir -p "${WORK_DIR}" || :
 cd "${WORK_DIR}"
 
-# Check for tools in both locations: /data/tools (old venv) or /root/mww-tools (NGC container)
+# Check for tools in both locations: /data/tools (old location) or /root/mww-tools (system install)
 if [ -d "${DATA_DIR}/tools/piper-sample-generator" ]; then
     PSG="${DATA_DIR}/tools/piper-sample-generator"
 elif [ -d "/root/mww-tools/piper-sample-generator" ]; then

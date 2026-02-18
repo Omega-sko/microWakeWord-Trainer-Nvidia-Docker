@@ -67,8 +67,6 @@ find_rev() {
 }
 
 converter() {
-    # No longer need to activate /data/.venv - using system Python from NGC container
-
     python - "${AUDIO_DIR}" "${AUDIO16K_DIR}" <<-EOF
 import os, sys
 from pathlib import Path

@@ -167,10 +167,9 @@ def _run_streamed(
 
 def _ensure_training_venv(log_path: Path) -> None:
     """
-    Training venv is no longer required - TensorFlow is built into the NGC container.
-    This function now just logs that we're using the system Python.
+    Training environment is pre-configured in the Docker container.
+    This function is kept for backward compatibility but does nothing.
     """
-    _append_train_log("✅ Using system Python/TensorFlow from NGC container (no venv setup needed)")
     return
 
 

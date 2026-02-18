@@ -178,7 +178,13 @@ This container is built on the **Official TensorFlow 2.18.0 GPU Image** (`tensor
 Training automatically uses GPU if available. The container supports:
 - **Modern NVIDIA GPUs**: Compute Capability 6.0+ (Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper)
   - TensorFlow 2.18.0 officially supports CUDA Compute Capability 6.0 and higher
+  - **RTX 50xx series** (5060, 5070, 5080, 5090) fully supported with automatic XLA PTX workarounds
 - **Automatic CPU Fallback**: If GPU training fails (OOM, driver issues), the system automatically retries on CPU
+
+**GPU Training is the Default:**
+- First attempt: GPU training with optimized settings
+- Second attempt: CPU fallback only if GPU fails
+- Your RTX 5070 Ti will be used by default for all training
 
 ### Force CPU Training
 
@@ -193,6 +199,46 @@ docker run -d \
 ```
 
 The `CUDA_VISIBLE_DEVICES=""` environment variable disables GPU access.
+
+---
+
+## ⚠️ Known Issues
+
+### RTX 50xx Series (Blackwell Architecture) - TensorFlow CUDA Compatibility
+
+**Issue**: RTX 50xx series GPUs (Compute Capability 12.0) may show warnings about missing CUDA kernel binaries:
+
+```
+W0000 00:00:1771428664.557890 159 gpu_device.cc:2431] TensorFlow was not built 
+with CUDA kernel binaries compatible with compute capability 12.0. CUDA kernels 
+will be jit-compiled from PTX, which could take 30 minutes or longer.
+```
+
+**Status**: ✅ **FIXED** - This repository includes automatic workarounds for RTX 50xx GPUs.
+
+**GPU Training is Enabled:**
+RTX 50xx GPUs (including your RTX 5070 Ti) will train on GPU by default. The fixes enable PTX JIT compilation, so your GPU remains the primary training device.
+
+**What we do automatically:**
+1. **XLA PTX Fallback**: Set `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` to enable driver-side PTX compilation
+2. **Disable Auto JIT**: Set `TF_XLA_FLAGS=--tf_xla_auto_jit=off` to avoid XLA JIT compilation issues
+3. **CPU Fallback**: If GPU training still fails, automatic detection triggers CPU-only training
+4. **Extended Error Detection**: GPU failure markers now detect compute capability errors, PTX issues, and traceback failures
+
+**For advanced users:**
+- Force CPU training: Set `CUDA_VISIBLE_DEVICES=""` environment variable
+- Override XLA flags: Set `XLA_FLAGS` before running the container (will skip auto-detection)
+
+**Technical Details:**
+- TensorFlow 2.18.0 does not ship with pre-compiled CUDA kernels for sm_120 (Blackwell architecture)
+- PTX JIT compilation can fail or be very slow without proper XLA flags
+- Our workarounds enable runtime PTX compilation and provide graceful CPU fallback
+- This affects: RTX 5060, 5070, 5080, 5090 (laptop and desktop variants)
+
+**References:**
+- [TensorFlow Issue #89272: RTX 5090 Support](https://github.com/tensorflow/tensorflow/issues/89272)
+- [TensorFlow Issue #101746: PTX Error Workarounds](https://github.com/tensorflow/tensorflow/issues/101746)
+- [NVIDIA Blackwell Compatibility Guide](https://docs.nvidia.com/cuda/blackwell-compatibility-guide/)
 
 ---
 

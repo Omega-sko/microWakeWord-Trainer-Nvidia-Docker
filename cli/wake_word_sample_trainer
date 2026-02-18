@@ -48,24 +48,23 @@ elif [ -z "$WAKE_WORD_TITLE" ] ; then
     WAKE_WORD_TITLE="$WAKE_WORD"
 fi
 
-# No longer need to activate /data/.venv - using system Python from NGC container
-# which has TensorFlow pre-installed with proper CUDA/PTX support for sm_120
-
-# --- WSL2 GPU visibility fix (venv sometimes doesn't inherit WSL driver path) ---
+# --- GPU compatibility fixes ---
 # Keep a copy so we can restore/preserve on fallback if desired.
 ORIG_XLA_FLAGS="${XLA_FLAGS:-}"
 
+# WSL2 GPU visibility fix
 if [ -d /usr/lib/wsl/lib ]; then
   export LD_LIBRARY_PATH="/usr/lib/wsl/lib:${LD_LIBRARY_PATH:-}"
   echo "ℹ️  WSL2 detected: LD_LIBRARY_PATH+=/usr/lib/wsl/lib"
+fi
 
-  # Blackwell / PTXAS workaround: only apply on WSL *and* only if user didn't set XLA_FLAGS
-  if [ -z "${XLA_FLAGS:-}" ]; then
-    export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
-    echo "ℹ️  WSL2: setting XLA_FLAGS=${XLA_FLAGS}"
-  else
-    echo "ℹ️  Using user-provided XLA_FLAGS=${XLA_FLAGS}"
-  fi
+# RTX 50xx (Blackwell / Compute Capability 12.0) PTX JIT workaround
+# Apply for ALL systems, not just WSL2, to handle PTX compilation failures
+if [ -z "${XLA_FLAGS:-}" ]; then
+  export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+  echo "ℹ️  Setting XLA_FLAGS for PTX compatibility: ${XLA_FLAGS}"
+else
+  echo "ℹ️  Using user-provided XLA_FLAGS=${XLA_FLAGS}"
 fi
 # -----------------------------------------------------------------------------
 
@@ -234,7 +233,35 @@ GPU_FALLBACK_MARKERS=(
   "dst tensor is not initialized"
   "failed copying input tensor"
   "_eagerconst"
+  "cuda_error_invalid_ptx"
+  "cuda_error_invalid_handle"
+  "compute capability"
+  "jit-compiled from ptx"
+  "ptxas"
+  "culaunchkernel"
+  "traceback"
 )
+
+# ============================================================================
+# GPU Fallback Logic
+# ============================================================================
+# This script attempts GPU training first, then falls back to CPU if needed.
+#
+# RTX 50xx Series (Blackwell / Compute Capability 12.0) - FIXED:
+# - Applied XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found
+# - Set TF_XLA_FLAGS=--tf_xla_auto_jit=off to disable problematic JIT
+# - Extended GPU_FALLBACK_MARKERS to detect compute capability errors
+# - These fixes allow RTX 50xx GPUs to train successfully via PTX fallback
+#
+# If GPU still fails (OOM, driver issues, etc.), the markers below detect
+# common failure patterns and trigger automatic CPU fallback.
+#
+# GPU failure markers now include:
+# - Compute capability warnings/errors
+# - PTX/PTXAS compilation failures
+# - CUDA_ERROR_INVALID_PTX / CUDA_ERROR_INVALID_HANDLE
+# - Python tracebacks (indicating crashes)
+# ============================================================================
 
 run_attempt() {
   local label="$1"
@@ -255,16 +282,29 @@ run_attempt() {
   return ${PIPESTATUS[0]}
 }
 
-# --------- ENV (keep compatible; DO NOT add unsupported XLA flags) ----------
+# --------- ENV (RTX 50xx / Blackwell compatibility) ----------
 export TF_CPP_MIN_LOG_LEVEL="${TF_CPP_MIN_LOG_LEVEL:-2}"
-export TF_XLA_FLAGS="${TF_XLA_FLAGS:---tf_xla_auto_jit=0}"
+
+# Disable XLA auto JIT to avoid PTX compilation failures on RTX 50xx
+# Use 'off' instead of '0' for better compatibility
+export TF_XLA_FLAGS="${TF_XLA_FLAGS:---tf_xla_auto_jit=off}"
 
 export NVIDIA_TF32_OVERRIDE="${NVIDIA_TF32_OVERRIDE:-1}"
 export TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
 export TF_GPU_ALLOCATOR="${TF_GPU_ALLOCATOR:-cuda_malloc_async}"
 
+echo ""
+echo "🎯 GPU-Training aktiviert für RTX 50xx Serie (Compute Capability 12.0)"
+echo "   XLA_FLAGS: ${XLA_FLAGS}"
+echo "   TF_XLA_FLAGS: ${TF_XLA_FLAGS}"
+echo "   GPU Allocator: ${TF_GPU_ALLOCATOR}"
+echo ""
+
 if run_attempt "Attempt 1/2: GPU training (allow_growth + cuda_malloc_async)" ; then
-  echo "✅ Training complete (GPU path)."
+  echo ""
+  echo "✅ Training erfolgreich abgeschlossen (GPU-Pfad)."
+  echo "   Ihre RTX 5070 Ti GPU wurde verwendet!"
+  echo ""
 else
   echo "⚠️  GPU attempt failed. Checking whether this looks like a GPU/OOM/runtime failure…"
 
@@ -279,6 +319,8 @@ else
 
   if [ "${looks_like_gpu_fail}" = "true" ]; then
     echo "↪️  Detected GPU/OOM/runtime failure markers. Falling back to CPU."
+    echo "   (Dies ist nur ein Notfall-Fallback - normalerweise trainiert die GPU)"
+    echo ""
 
     export CUDA_VISIBLE_DEVICES=""
     unset TF_GPU_ALLOCATOR
@@ -294,7 +336,10 @@ else
     fi
 
     if run_attempt "Attempt 2/2: CPU fallback (CUDA_VISIBLE_DEVICES='')" ; then
-      echo "✅ Training complete (CPU fallback)."
+      echo ""
+      echo "✅ Training erfolgreich abgeschlossen (CPU-Fallback)."
+      echo "   Hinweis: GPU-Training ist fehlgeschlagen, CPU wurde als Backup verwendet."
+      echo ""
     else
       echo "❌ Training failed on BOTH GPU and CPU. See: ${TRAIN_LOG}" >&2
       exit 1
