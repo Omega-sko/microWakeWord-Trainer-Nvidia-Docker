@@ -58,6 +58,21 @@ if [ -d /usr/lib/wsl/lib ]; then
   echo "ℹ️  WSL2 detected: LD_LIBRARY_PATH+=/usr/lib/wsl/lib"
 fi
 
+# libcuda stub interference fix:
+# Remove /usr/local/cuda/lib64/stubs from LD_LIBRARY_PATH so that the stub
+# libcuda.so.1 never takes precedence over the real driver library.
+# Prepend /usr/lib/x86_64-linux-gnu (real libcuda.so.1 location on Debian/Ubuntu)
+# so TensorFlow finds the real CUDA driver and avoids cuInit UNKNOWN ERROR (100).
+_lp="${LD_LIBRARY_PATH:-}"
+_lp="${_lp//:\/usr\/local\/cuda\/lib64\/stubs/}"
+_lp="${_lp//\/usr\/local\/cuda\/lib64\/stubs:/}"
+_lp="${_lp//\/usr\/local\/cuda\/lib64\/stubs/}"
+if [ -d /usr/lib/x86_64-linux-gnu ]; then
+  export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu${_lp:+:${_lp}}"
+  echo "ℹ️  LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu prepended, CUDA stubs path removed"
+fi
+unset _lp
+
 # RTX 50xx (Blackwell / Compute Capability 12.0) PTX JIT workaround
 # Apply for ALL systems, not just WSL2, to handle PTX compilation failures
 if [ -z "${XLA_FLAGS:-}" ]; then
@@ -300,7 +315,69 @@ echo "   TF_XLA_FLAGS: ${TF_XLA_FLAGS}"
 echo "   GPU Allocator: ${TF_GPU_ALLOCATOR}"
 echo ""
 
-if run_attempt "Attempt 1/2: GPU training (allow_growth + cuda_malloc_async)" ; then
+# ============================================================================
+# GPU Preflight Smoke Test
+# ============================================================================
+# Runs a minimal TensorFlow GPU op before the full training attempt so that
+# hard failures (CUDA_ERROR_INVALID_PTX on CC 12.0 under WSL2, missing driver,
+# etc.) are detected cleanly without polluting the training log with large
+# Python tracebacks.
+#
+# MWW_SKIP_GPU_PREFLIGHT=1  – skip the preflight check entirely
+# MWW_FORCE_GPU=1           – alias: attempt GPU even if preflight fails
+# ============================================================================
+_GPU_OK=true
+if [ "${MWW_FORCE_GPU:-0}" = "1" ] || [ "${MWW_SKIP_GPU_PREFLIGHT:-0}" = "1" ]; then
+  echo "ℹ️  GPU preflight skipped (MWW_FORCE_GPU/MWW_SKIP_GPU_PREFLIGHT=1)."
+else
+  echo "🔍 Running TensorFlow GPU preflight smoke test…"
+  if _PREFLIGHT_MSG=$(python -W ignore -c "
+import sys, os
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+try:
+    import tensorflow as tf
+    gpus = tf.config.list_physical_devices('GPU')
+    if not gpus:
+        print('No GPU devices found')
+        sys.exit(1)
+    with tf.device('/GPU:0'):
+        _ = tf.cast([1.0], tf.float32)
+    sys.exit(0)
+except Exception as e:
+    msg = str(e)
+    print(msg[:300] if len(msg) > 300 else msg)
+    sys.exit(1)
+" 2>/dev/null); then
+    echo "✅ GPU preflight passed."
+  else
+    _GPU_OK=false
+    echo "⚠️  TensorFlow GPU preflight failed (invalid PTX on CC 12.0 under WSL2 or similar)."
+    [ -n "${_PREFLIGHT_MSG}" ] && echo "   Reason: ${_PREFLIGHT_MSG}"
+    echo "   Skipping GPU training — falling back to CPU automatically."
+    echo "   (Set MWW_FORCE_GPU=1 to attempt GPU training anyway)"
+    echo ""
+  fi
+fi
+
+if [ "${_GPU_OK}" = "false" ]; then
+  # Preflight failed — skip GPU attempt, go straight to CPU
+  export CUDA_VISIBLE_DEVICES=""
+  unset TF_GPU_ALLOCATOR
+  unset TF_XLA_FLAGS
+  if [ -n "${ORIG_XLA_FLAGS}" ]; then
+    export XLA_FLAGS="${ORIG_XLA_FLAGS}"
+  else
+    unset XLA_FLAGS
+  fi
+  if run_attempt "Attempt 1/1: CPU training (GPU preflight failed)" ; then
+    echo ""
+    echo "✅ Training erfolgreich abgeschlossen (CPU, GPU preflight fehlgeschlagen)."
+    echo ""
+  else
+    echo "❌ Training failed on CPU. See: ${TRAIN_LOG}" >&2
+    exit 1
+  fi
+elif run_attempt "Attempt 1/2: GPU training (allow_growth + cuda_malloc_async)" ; then
   echo ""
   echo "✅ Training erfolgreich abgeschlossen (GPU-Pfad)."
   echo "   Ihre RTX 5070 Ti GPU wurde verwendet!"

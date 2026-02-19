@@ -186,6 +186,10 @@ Training automatically uses GPU if available. The container supports:
 - Second attempt: CPU fallback only if GPU fails
 - Your RTX 5070 Ti will be used by default for all training
 
+### Sample Generation (Piper / PyTorch)
+
+Wake-word sample generation uses **[piper-sample-generator](https://github.com/rhasspy/piper-sample-generator)**, which is a PyTorch-based TTS engine.  PyTorch ships with CUDA support and will automatically use the GPU for sample generation, giving a significant speed-up on NVIDIA GPUs.  This is independent of the TensorFlow training stage — sample generation can succeed on GPU even when TensorFlow GPU training falls back to CPU.
+
 ### Force CPU Training
 
 To force CPU-only training (disable GPU), run the container with:
@@ -241,31 +245,63 @@ with CUDA kernel binaries compatible with compute capability 12.0. CUDA kernels
 will be jit-compiled from PTX, which could take 30 minutes or longer.
 ```
 
-**Status**: ✅ **FIXED** - This repository includes automatic workarounds for RTX 50xx GPUs.
+On some configurations (notably WSL2), TensorFlow may fail even on simple ops with:
+```
+CUDA_ERROR_INVALID_PTX / CUDA_ERROR_INVALID_HANDLE
+```
 
-**GPU Training is Enabled:**
-RTX 50xx GPUs (including your RTX 5070 Ti) will train on GPU by default. The fixes enable PTX JIT compilation, so your GPU remains the primary training device.
+**Status**: ✅ **HANDLED** — The trainer performs a fast GPU preflight smoke test before the full training run.
+
+**TF-GPU Preflight Smoke Test (automatic):**
+Before attempting GPU training, the trainer runs a minimal `tf.cast` operation under `with tf.device('/GPU:0')`.  If this fails, GPU training is skipped entirely and CPU training starts immediately — without any large Python traceback in the training log.  A short, human-readable reason is printed instead:
+
+```
+⚠️  TensorFlow GPU preflight failed (invalid PTX on CC 12.0 under WSL2 or similar).
+   Reason: <short error message>
+   Skipping GPU training — falling back to CPU automatically.
+   (Set MWW_FORCE_GPU=1 to attempt GPU training anyway)
+```
 
 **What we do automatically:**
-1. **XLA PTX Fallback**: Set `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` to enable driver-side PTX compilation
-2. **Disable Auto JIT**: Set `TF_XLA_FLAGS=--tf_xla_auto_jit=0` to avoid XLA JIT compilation issues
-3. **CPU Fallback**: If GPU training still fails, automatic detection triggers CPU-only training
-4. **Extended Error Detection**: GPU failure markers now detect compute capability errors, PTX issues, and traceback failures
+1. **TF-GPU Preflight**: Fast `tf.cast` smoke test before committing to full GPU training run
+2. **Instant CPU Fallback**: If preflight fails, jump straight to CPU — no wasted time or noisy logs
+3. **XLA PTX Fallback**: Set `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` to enable driver-side PTX compilation
+4. **Disable Auto JIT**: Set `TF_XLA_FLAGS=--tf_xla_auto_jit=0` to avoid XLA JIT compilation issues
+5. **Extended Error Detection**: GPU failure markers detect compute capability errors, PTX issues, and traceback failures even if preflight is skipped
 
-**For advanced users:**
-- Force CPU training: Set `CUDA_VISIBLE_DEVICES=""` environment variable
-- Override XLA flags: Set `XLA_FLAGS` before running the container (will skip auto-detection)
+**Preflight env-var controls:**
+
+| Variable | Effect |
+|---|---|
+| `MWW_SKIP_GPU_PREFLIGHT=1` | Skip the preflight check; attempt GPU training regardless |
+| `MWW_FORCE_GPU=1` | Alias for `MWW_SKIP_GPU_PREFLIGHT=1` |
 
 **Technical Details:**
 - TensorFlow 2.18.0 does not ship with pre-compiled CUDA kernels for sm_120 (Blackwell architecture)
 - PTX JIT compilation can fail or be very slow without proper XLA flags
-- Our workarounds enable runtime PTX compilation and provide graceful CPU fallback
+- Our preflight catches hard failures early; the XLA workarounds handle the slow-JIT case
 - This affects: RTX 5060, 5070, 5080, 5090 (laptop and desktop variants)
 
 **References:**
 - [TensorFlow Issue #89272: RTX 5090 Support](https://github.com/tensorflow/tensorflow/issues/89272)
 - [TensorFlow Issue #101746: PTX Error Workarounds](https://github.com/tensorflow/tensorflow/issues/101746)
 - [NVIDIA Blackwell Compatibility Guide](https://docs.nvidia.com/cuda/blackwell-compatibility-guide/)
+
+---
+
+### libcuda Stub Interference (`cuInit UNKNOWN ERROR (100)`)
+
+**Issue**: On some systems (especially inside Docker/WSL2 with the NVIDIA container runtime) the stub library `/usr/local/cuda/lib64/stubs/libcuda.so.1` can appear first in `LD_LIBRARY_PATH`.  TensorFlow picks up the stub instead of the real driver, leading to:
+```
+failed call to cuInit: UNKNOWN ERROR (100)
+```
+even when the GPU is present and working.
+
+**Status**: ✅ **FIXED** — The trainer script (`cli/wake_word_sample_trainer`) automatically:
+1. Removes `/usr/local/cuda/lib64/stubs` from `LD_LIBRARY_PATH` before launching Python
+2. Prepends `/usr/lib/x86_64-linux-gnu` (the standard location of the real `libcuda.so.1` on Debian/Ubuntu hosts) to ensure the real driver library is found first
+
+This fix is applied for every training run and does not affect other parts of the container.
 
 ---
 
