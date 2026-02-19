@@ -38,6 +38,25 @@ jobs:
             echo "tags=${IMAGE}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Free disk space (runner)
+        run: |
+          set -euxo pipefail
+          echo "Disk before:"
+          df -h
+
+          # Common huge directories on GitHub-hosted ubuntu runners
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+
+          # Remove unused docker data
+          docker system prune -af || true
+
+          echo "Disk after:"
+          df -h
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
