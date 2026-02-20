@@ -184,6 +184,45 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+### Personal voice samples → automatic feature generation (Recorder → Training)
+
+**Problem:**  
+The Recorder stores personal takes as WAV files in:
+
+- `/data/personal_samples/*.wav`
+
+However, the training pipeline does **not** consume these WAVs directly.  
+`wake_word_sample_trainer` only enables the “personal up-weighting” path when it finds **precomputed personal features** at:
+
+- `/data/work/personal_augmented_features/training`
+
+So even if personal WAVs exist, training will ignore them unless personal features are generated first.
+
+**Customization / Fix:**  
+Before starting training, `train_wake_word` now checks for personal WAV files. If any are present, it runs:
+
+```bash
+wake_word_sample_augmenter \
+  --data-dir /data \
+  --personal-dir /data/personal_samples \
+  --personal-output-dir /data/work/personal_augmented_features
+```
+
+This generates/updates the personal feature datasets under:
+
+- `/data/work/personal_augmented_features/{training,validation,test}`
+
+Once those directories exist, `wake_word_sample_trainer` automatically detects them and injects the personal feature block into `training_parameters.yaml` (with `sampling_weight: 3.0`), so personal samples are **up-weighted** during training.
+
+**Notes:**
+- If `/data/personal_samples` is empty, this step is skipped and training proceeds normally.
+- If personal feature generation fails, training fails fast (to avoid silently running without personal data).
+- To fully reset this behavior, delete both:
+  - `/data/personal_samples` (personal WAVs)
+  - `/data/work/personal_augmented_features` (generated personal features)
+
+---
+
 ### `micro-wake-word` — `microwakeword/train.py`: robust NumPy conversion (`_to_numpy`)
 
 **Patch file:** [`patches/micro-wake-word-train-to_numpy.patch`](patches/micro-wake-word-train-to_numpy.patch)
