@@ -137,12 +137,18 @@ Each run is placed in its own timestamped folder.
 
 ## 🎤 Optional: Personal Voice Samples (Advanced)
 
-If you record personal samples:
-- They are automatically augmented
-- They are **up-weighted during training**
-- This significantly improves real-world accuracy
+If you record personal samples, the trainer automatically detects and uses them:
 
-No configuration required — detection is automatic.
+- Place personal WAV recordings in **`/data/personal_samples/`** (the web recorder does this automatically)
+- Before training starts, the system checks for WAV files in `/data/personal_samples/`
+- If WAV files are present, **personal features** are automatically generated and saved to `/data/work/personal_augmented_features/`
+- These personal features are then **up-weighted during training**, significantly improving real-world accuracy for your voice
+
+Personal feature generation is triggered automatically when:
+- WAV files are found in `/data/personal_samples/` and features have not yet been generated, **or**
+- Existing WAV files are newer than the previously generated features
+
+No configuration required — the entire process is automatic.
 
 ---
 
