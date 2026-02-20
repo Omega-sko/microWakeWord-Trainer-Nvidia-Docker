@@ -25,6 +25,25 @@ try:
     from ai_edge_litert.interpreter import Interpreter
     import tensorflow as tf
 
+    # Print TF build info for diagnostics
+    try:
+        build_info = tf.sysconfig.get_build_info()
+        print(f"TF build: cuda_version={build_info.get('cuda_version', 'n/a')}, cudnn_version={build_info.get('cudnn_version', 'n/a')}")
+    except Exception as e:
+        print(f"TF build info unavailable: {e}")
+
+    # List physical GPU devices
+    try:
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            print(f"tf.config.list_physical_devices('GPU'): {[g.name for g in gpus]}")
+        else:
+            print("tf.config.list_physical_devices('GPU'): [] (no GPUs visible to TF)")
+            print("  Hint: check that the CUDA library versions in /opt/conda/lib match")
+            print("  the CUDA version TF was built against (see 'cuda_version' above).")
+    except Exception as e:
+        print(f"tf.config.list_physical_devices error: {e}")
+
     try:
         with tf.device("/GPU:0"):
             a = tf.random.normal([10000, 10000])
