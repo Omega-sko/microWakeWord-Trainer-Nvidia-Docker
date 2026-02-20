@@ -44,6 +44,9 @@ COPY --chown=root:root --chmod=0755 \
     requirements.txt \
     /root/mww-scripts/
 
+# Copy Patch folder
+COPY --chown=root:root patches/ /root/mww-scripts/patches/
+
 # CLI folder
 COPY --chown=root:root cli/ /root/mww-scripts/cli/
 
