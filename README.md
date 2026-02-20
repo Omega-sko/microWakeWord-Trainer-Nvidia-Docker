@@ -184,6 +184,51 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+### CUDA 12.9 alignment, `ldconfig` for conda libs & TensorFlow GPU diagnostics
+
+**Problem:**  
+`tf-nightly[and-cuda]` is compiled against CUDA 12.x (`cuda_version: 12.5.1` at the time of writing).
+However, conda was installing CUDA 13.x into `/opt/conda/lib` (e.g. `libcudart.so.13.1.80`,
+`libcublas.so.13.2.1.1`). When TensorFlow tried to `dlopen` these mismatched libraries it logged:
+
+```
+Cannot dlopen some GPU libraries ... Skipping registering GPU devices...
+```
+
+No GPUs were visible to TensorFlow, even though the hardware and driver were functional.
+
+**Fix — `dockerfile`:**
+
+1. **conda CUDA 12.9.0** — the conda `cuda` package is now pinned to channel
+   `nvidia/label/cuda-12.9.0`, which is consistent with both `tf-nightly[and-cuda]` (CUDA 12.x build)
+   and the PyTorch `cu129` wheels installed in the venv:
+   ```dockerfile
+   /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.9.0" cuda
+   ```
+
+2. **`ldconfig` registration** — in addition to `LD_LIBRARY_PATH=/opt/conda/lib`, the conda lib
+   path is now also registered with the system dynamic linker so that every process (not just shells
+   that source the environment) can find the CUDA 12.9 libraries:
+   ```dockerfile
+   RUN echo /opt/conda/lib > /etc/ld.so.conf.d/conda.conf && ldconfig
+   ```
+
+**Fix — `cli/test_python`:**  
+The TensorFlow test block now prints diagnostic information before attempting GPU operations:
+
+- `tf.sysconfig.get_build_info()` — shows the exact CUDA/cuDNN versions TF was compiled against,
+  making library-version mismatches immediately visible.
+- `tf.config.list_physical_devices('GPU')` — explicitly lists GPUs visible to TF; when the list is
+  empty, a hint is printed pointing to the library-version mismatch as the likely cause.
+
+**Notes:**
+- Torch `cu129` wheels and conda CUDA 12.9 share the same runtime, so no separate CUDA stack is
+  needed for Torch.
+- If TF is upgraded to a build targeting a different CUDA minor version, update the conda channel
+  label accordingly (e.g. `nvidia/label/cuda-12.x.0`).
+
+---
+
 ### Personal voice samples → automatic feature generation (Recorder → Training)
 
 **Problem:**  
