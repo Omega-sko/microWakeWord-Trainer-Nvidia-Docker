@@ -17,13 +17,13 @@ EXPOSE 8789
 WORKDIR /root/mww-scripts
 
 ##### custom add
-# Install conda + CUDA 13.1.1
+# Install conda + CUDA 12.9.0
 RUN apt-get update && apt-get install -y --no-install-recommends wget && \
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
     bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda && \
     /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
     /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    /opt/conda/bin/conda install -y -c "nvidia/label/cuda-13.1.1" cuda && \
+    /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.9.0" cuda && \
     rm Miniconda3-latest-Linux-x86_64.sh
 
 # Set LD_LIBRARY_PATH globally
