@@ -26,8 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget && \
     /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.9.0" cuda && \
     rm Miniconda3-latest-Linux-x86_64.sh
 
-# Set LD_LIBRARY_PATH globally
+# Set LD_LIBRARY_PATH globally and register conda libs with the dynamic linker
 ENV LD_LIBRARY_PATH=/opt/conda/lib
+RUN echo /opt/conda/lib > /etc/ld.so.conf.d/conda.conf && ldconfig
 
 # resolve minor warning when entering bash ...
 RUN apt-get update && apt-get install -y libtinfo6 && \
