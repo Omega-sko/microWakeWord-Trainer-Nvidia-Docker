@@ -108,6 +108,47 @@ else
     echo
 fi
 
+# ---- Personal feature generation (independent of main augmentation) ----
+PERSONAL_SAMPLES_DIR="${DATA_DIR}/personal_samples"
+PERSONAL_FEATURES_DIR="${DATA_DIR}/work/personal_augmented_features"
+
+shopt -s nullglob
+personal_wavs=( "${PERSONAL_SAMPLES_DIR}"/*.wav )
+shopt -u nullglob
+
+if [ ${#personal_wavs[@]} -gt 0 ] ; then
+    echo "ℹ️  Found ${#personal_wavs[@]} personal WAV(s) in ${PERSONAL_SAMPLES_DIR}"
+    AUGMENT_PERSONAL=false
+    if [ ! -d "${PERSONAL_FEATURES_DIR}/training" ] ; then
+        echo "   Personal features missing – will generate."
+        AUGMENT_PERSONAL=true
+    elif find "${PERSONAL_SAMPLES_DIR}" -maxdepth 1 -name '*.wav' \
+         -newer "${PERSONAL_FEATURES_DIR}/training/wakeword_mmap/data.ninja" \
+         -print -quit 2>/dev/null | grep -q . ; then
+        echo "   Personal WAVs newer than features – will regenerate."
+        AUGMENT_PERSONAL=true
+    else
+        echo "   Personal features are up to date."
+    fi
+
+    if ${AUGMENT_PERSONAL} ; then
+        rm -rf "${PERSONAL_FEATURES_DIR}" || :
+        echo "   Generating personal features from ${#personal_wavs[@]} WAV(s) ..."
+        python -u "${CLIDIR}/wake_word_sample_augmenter" \
+            --data-dir="${DATA_DIR}" \
+            --input-dir="${AUGMENTED_DIR}" \
+            --output-dir="${AUGMENTED_DIR}" \
+            --personal-dir="${PERSONAL_SAMPLES_DIR}" \
+            --personal-output-dir="${PERSONAL_FEATURES_DIR}" \
+            || { echo "❌ Personal feature generation failed." >&2 ; exit 1 ; }
+        echo "✅ Personal features generated: ${PERSONAL_FEATURES_DIR}"
+    fi
+else
+    echo "ℹ️  No personal WAVs found in ${PERSONAL_SAMPLES_DIR} – skipping personal feature generation."
+fi
+echo
+# -------------------------------------------------------------------------
+
 POST_AUGMENT_TS=$EPOCHSECONDS
 
 "${CLIDIR}/wake_word_sample_trainer" \
