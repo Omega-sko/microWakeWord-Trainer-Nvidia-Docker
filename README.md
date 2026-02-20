@@ -167,3 +167,40 @@ Built on top of the excellent
 **https://github.com/kahrendt/microWakeWord**
 
 Huge thanks to the original authors ❤️
+
+---
+
+## 🔧 Local Patches & Customizations
+
+This section documents all local modifications applied automatically to upstream dependencies during setup.
+These patches live in the [`patches/`](patches/) directory and are applied by `cli/setup_python_venv`
+right after cloning — so they are re-applied automatically whenever `/data/tools` is recreated.
+
+---
+
+### `micro-wake-word` — `microwakeword/train.py`: robust NumPy conversion (`_to_numpy`)
+
+**Patch file:** [`patches/micro-wake-word-train-to_numpy.patch`](patches/micro-wake-word-train-to_numpy.patch)
+
+**Problem:**  
+`model.evaluate(..., return_dict=True)` can return either a TensorFlow `EagerTensor` or a plain NumPy
+array, depending on the `tf-nightly` build in use. Calling `.numpy()` directly on a plain NumPy array
+raises an `AttributeError` and breaks training.
+
+**Fix:**  
+A small helper function `_to_numpy(x)` is injected into `train.py`:
+
+```python
+def _to_numpy(x):
+    """Convert TF tensors/variables OR numpy-like results to a NumPy array."""
+    return x.numpy() if hasattr(x, "numpy") else np.asarray(x)
+```
+
+All four bare `.numpy()` calls on metric results (`fp`, `tp`, `fn`) inside
+`validate_nonstreaming()` are replaced with `_to_numpy(...)`.
+
+**Affected lines in upstream `train.py`:**
+- `test_set_fp = result["fp"].numpy()` → `_to_numpy(result["fp"])`
+- `all_true_positives = ambient_predictions["tp"].numpy()` → `_to_numpy(ambient_predictions["tp"])`
+- `ambient_false_positives = ambient_predictions["fp"].numpy() - test_set_fp` → `_to_numpy(ambient_predictions["fp"]) - test_set_fp`
+- `all_false_negatives = ambient_predictions["fn"].numpy()` → `_to_numpy(ambient_predictions["fn"])`
