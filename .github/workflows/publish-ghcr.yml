@@ -2,6 +2,15 @@ name: Build and publish Docker image to GHCR
 
 on:
   workflow_dispatch:
+    inputs:
+      fresh:
+        description: "Fresh rebuild (disable Buildx cache / force full rebuild)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   push:
     branches: ["main", "dev"]
 
@@ -63,3 +72,13 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+
+          # Always try to pull newest base image for the tag (e.g. tensorflow/tensorflow:nightly-gpu)
+          pull: true
+
+          # If fresh=true => disable cache and rebuild everything
+          no-cache: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.fresh == 'true' }}
+
+          # Keep cache for normal builds (cached)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
