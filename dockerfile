@@ -1,6 +1,6 @@
 # Base - NVIDIA CUDA 12.5.1 + cuDNN 9 Runtime on Ubuntu 22.04
 # Matches tf-nightly[and-cuda] build expectations (CUDA 12.5.1 / cuDNN 9)
-FROM nvidia/cuda:12.5.1-cudnn9-runtime-ubuntu22.04
+FROM nvidia/cuda:12.7.0-cudnn9-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
