@@ -184,48 +184,63 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
-### CUDA 12.9 alignment, `ldconfig` for conda libs & TensorFlow GPU diagnostics
+### NVIDIA CUDA base image & TensorFlow GPU runtime
 
 **Problem:**  
 `tf-nightly[and-cuda]` is compiled against CUDA 12.x (`cuda_version: 12.5.1` at the time of writing).
-However, conda was installing CUDA 13.x into `/opt/conda/lib` (e.g. `libcudart.so.13.1.80`,
-`libcublas.so.13.2.1.1`). When TensorFlow tried to `dlopen` these mismatched libraries it logged:
+A previous image variant installed CUDA via conda, but conda resolved CUDA 13.x libraries
+(e.g. `libcudart.so.13.1.80`, `libcublas.so.13.2.1.1`) into `/opt/conda/lib`.
+When TensorFlow tried to `dlopen` these mismatched libraries it logged:
 
 ```
 Cannot dlopen some GPU libraries ... Skipping registering GPU devices...
 ```
 
-No GPUs were visible to TensorFlow, even though the hardware and driver were functional.
+No GPUs were visible to TensorFlow even though the hardware and driver were functional.
+In addition, the conda-based image did not include `python3-venv`, so the recorder's venv
+creation (`python3 -m venv`) failed with `ensurepip not available`.
 
 **Fix — `dockerfile`:**
 
-1. **conda CUDA 12.9.0** — the conda `cuda` package is now pinned to channel
-   `nvidia/label/cuda-12.9.0`, which is consistent with both `tf-nightly[and-cuda]` (CUDA 12.x build)
-   and the PyTorch `cu129` wheels installed in the venv:
-   ```dockerfile
-   /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.9.0" cuda
-   ```
+1. **NVIDIA CUDA base image** — the image is now based on
+   `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04`, which provides a CUDA 12.x + cuDNN 9
+   runtime compatible with `tf-nightly[and-cuda]` (built against CUDA 12.5.1; any CUDA 12.x
+   runtime is ABI-forward-compatible). No conda CUDA installation is needed.
 
-2. **`ldconfig` registration** — in addition to `LD_LIBRARY_PATH=/opt/conda/lib`, the conda lib
-   path is now also registered with the system dynamic linker so that every process (not just shells
-   that source the environment) can find the CUDA 12.9 libraries:
+2. **System Python via apt** — conda is removed entirely. Python and all required venv tooling
+   are installed from Ubuntu 22.04's official packages:
    ```dockerfile
-   RUN echo /opt/conda/lib > /etc/ld.so.conf.d/conda.conf && ldconfig
+   python3 python3-venv python3-dev python3-pip python-is-python3
    ```
+   This ensures both `python3 -m venv` (used by the recorder) and `setup_python_venv` work
+   without any `ensurepip not available` errors.
 
 **Fix — `cli/test_python`:**  
-The TensorFlow test block now prints diagnostic information before attempting GPU operations:
+The TensorFlow test block prints diagnostic information before attempting GPU operations:
 
 - `tf.sysconfig.get_build_info()` — shows the exact CUDA/cuDNN versions TF was compiled against,
   making library-version mismatches immediately visible.
 - `tf.config.list_physical_devices('GPU')` — explicitly lists GPUs visible to TF; when the list is
   empty, a hint is printed pointing to the library-version mismatch as the likely cause.
 
+**Diagnosing GPU issues inside the container:**
+```bash
+# Check TF build info and GPU visibility
+source /data/.venv/bin/activate
+python -c "
+import tensorflow as tf
+print(tf.sysconfig.get_build_info())
+print(tf.config.list_physical_devices('GPU'))
+"
+# Check CUDA libraries provided by the base image
+ldconfig -p | grep -E 'libcuda|libcudart|libcublas|libcudnn'
+```
+
 **Notes:**
-- Torch `cu129` wheels and conda CUDA 12.9 share the same runtime, so no separate CUDA stack is
-  needed for Torch.
-- If TF is upgraded to a build targeting a different CUDA minor version, update the conda channel
-  label accordingly (e.g. `nvidia/label/cuda-12.x.0`).
+- Torch `cu129` wheels are installed into the training venv and use the CUDA runtime from the
+  base image — no separate CUDA stack is needed.
+- If TF is upgraded to a build targeting a different CUDA minor version, update the base image
+  tag accordingly (e.g. `nvidia/cuda:12.5.1-cudnn-runtime-ubuntu22.04`).
 
 ---
 
