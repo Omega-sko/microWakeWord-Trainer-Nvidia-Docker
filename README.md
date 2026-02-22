@@ -139,7 +139,7 @@ Each run is placed in its own timestamped folder.
 
 If you record personal samples, the trainer automatically detects and uses them:
 
-- Place personal WAV recordings in **`/data/personal_samples/`** (the web recorder does this automatically)
+- Place personal WAV recordings in **`/data/personal_samples/`** (If you recorded the samples yourself, copy the .wav files into this folder. Samples recorded with the recorder will be automatically saved in this folder.)
 - Before training starts, the system checks for WAV files in `/data/personal_samples/`
 - If WAV files are present, **personal features** are automatically generated and saved to `/data/work/personal_augmented_features/`
 - These personal features are then **up-weighted during training**, significantly improving real-world accuracy for your voice
