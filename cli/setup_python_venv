@@ -168,6 +168,18 @@ echo "   Patching microwakeword to require tf-nightly"
 echo ""
 sed -i 's/"tensorflow>=2.16"/"tf-nightly"/g' "${MWW}/setup.py"
 
+# Apply the _to_numpy patch so that model.evaluate() results are handled robustly
+# regardless of whether TF returns a Tensor or a plain NumPy array.
+# This is necessary because newer tf-nightly builds may return numpy arrays
+# instead of EagerTensors, causing bare .numpy() calls to fail.
+PATCH_FILE="${ROOTDIR}/patches/micro-wake-word-train-to_numpy.patch"
+echo "   Applying micro-wake-word train.py _to_numpy patch"
+git -C "${MWW}" apply "${PATCH_FILE}" || {
+    echo "ERROR: Failed to apply patch '${PATCH_FILE}' to micro-wake-word." >&2
+    echo "       Please check if the upstream train.py has changed and update the patch." >&2
+    exit 1
+}
+
 echo "   Installing microwakeword"
 pip_install -e "${MWW}"
 
