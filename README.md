@@ -191,6 +191,18 @@ NVIDIA Blackwell GPUs (sm_120, e.g. RTX 5070 Ti Laptop) that still hit PTX/LLVM 
 public `tf-nightly` wheel may work correctly with the official NGC TensorFlow container, which is
 built and tested against the latest CUDA and includes Blackwell-native kernels.
 
+#### 0. GitHub Actions — add `NGC_API_KEY` secret (CI builds only)
+
+To build the `dev2-ngc` image in GitHub Actions, the workflow must be able to pull the
+`nvcr.io/nvidia/tensorflow` base image.  Add your NGC API key as a repository secret:
+
+1. Go to **Settings → Secrets and variables → Actions → New repository secret**.
+2. Name: `NGC_API_KEY`
+3. Value: your NGC API key (obtain from <https://ngc.nvidia.com/setup/api-key>).
+
+The workflow logs in to `nvcr.io` only when `NGC_API_KEY` is set.  
+⚠️ **Never share or commit your NGC API key.**
+
 #### 1. Log in to NVIDIA NGC (free account required)
 
 ```bash
