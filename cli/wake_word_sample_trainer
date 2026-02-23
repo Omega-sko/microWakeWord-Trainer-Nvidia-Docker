@@ -234,6 +234,10 @@ GPU_FALLBACK_MARKERS=(
   "dst tensor is not initialized"
   "failed copying input tensor"
   "_eagerconst"
+  "llvm error"
+  "ptx version"
+  "sm_120"
+  "minimum required ptx version"
 )
 
 run_attempt() {

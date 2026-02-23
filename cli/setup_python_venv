@@ -147,7 +147,20 @@ pip_install -r "${ROOTDIR}/requirements.txt"
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
 echo "   ===== Installing Tensorflow${tfgpu} ====="
 ##### custom change
-if ${GPU} && [ "${TF_VARIANT:-}" = "blackwell" ] ; then
+if [ "${TF_VARIANT:-}" = "ngc" ] ; then
+    echo "   ===== TF_VARIANT=ngc: using container TensorFlow — skipping pip install ====="
+    echo "   ===== TF build info ====="
+    python - <<'PY'
+try:
+    import tensorflow as tf
+    print("tf.__version__:", tf.__version__)
+    import pprint
+    pprint.pprint(tf.sysconfig.get_build_info())
+    print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
+except Exception as e:
+    print(f"WARNING: Could not query TensorFlow build info: {e}")
+PY
+elif ${GPU} && [ "${TF_VARIANT:-}" = "blackwell" ] ; then
     echo "   ===== TF_VARIANT=blackwell: clean reinstall of TensorFlow for Blackwell (sm_120) ====="
     TF_PKGS="tf-nightly tensorflow tensorflow-gpu ai_edge_litert tensorboard tensorboard-data-server"
     # shellcheck disable=SC2086
