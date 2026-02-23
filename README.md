@@ -184,6 +184,78 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+### CUDA 12.8 Runtime Base Image
+
+**Why `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04` instead of conda CUDA:**
+
+The `dockerfile` now uses a public NVIDIA CUDA 12.8 + cuDNN runtime image as its base instead of
+installing Miniconda and pulling `cuda-12.5.0` via conda. This removes the conda/CUDA mixed-install
+fragility and ensures the container ships a self-consistent CUDA 12.8 stack without requiring an
+NGC (NVIDIA GPU Cloud) account — the `nvidia/cuda` images on Docker Hub are freely accessible.
+
+Benefits:
+- No more `LD_LIBRARY_PATH=/opt/conda/lib` override fighting system libraries
+- CUDA 12.8 ships PTX 8.7+ which covers `sm_120` (Blackwell / RTX 5000-series) via JIT
+- cuDNN is bundled at the correct version for CUDA 12.8
+
+---
+
+### `TF_VARIANT=blackwell` — Clean TensorFlow Reinstall for Blackwell GPUs
+
+**Problem:**  
+The current nightly TensorFlow wheel may be compiled with `cuda_version: 12.5` and only list
+`sm_60`, `sm_70`, `sm_80`, `sm_89`, `compute_90` as embedded compute capabilities.  On
+`sm_120` (RTX 5070 Ti Laptop GPU and other Blackwell cards) TensorFlow falls back to PTX JIT
+compilation, which can crash with:
+
+```
+LLVM ERROR: PTX version 8.5 does not support target 'sm_120'
+```
+
+**Fix — `TF_VARIANT=blackwell`:**  
+Set the environment variable before running `setup_python_venv` (GPU must be available):
+
+```bash
+TF_VARIANT=blackwell cli/setup_python_venv --data-dir /data --gpu
+```
+
+When `TF_VARIANT=blackwell` is set and `--gpu` is active, the script will:
+
+1. Uninstall any existing `tf-nightly`, `tensorflow`, `tensorflow-gpu`, `ai_edge_litert`,
+   `tensorboard`, and `tensorboard-data-server` packages.
+2. Reinstall them fresh with `--no-cache-dir --upgrade --pre` to pull the latest nightly wheel
+   (which is most likely to include CUDA 12.8 + sm_120 support).
+3. Print TensorFlow build info for verification:
+
+```python
+import tensorflow as tf
+print("tf.__version__:", tf.__version__)
+import pprint; pprint.pprint(tf.sysconfig.get_build_info())
+print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
+```
+
+**Diagnostic commands** (run inside the container or activated venv):
+
+```bash
+# Check TF version and build info
+python -c "import tensorflow as tf; import pprint; print(tf.__version__); pprint.pprint(tf.sysconfig.get_build_info())"
+
+# List detected GPUs
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+
+# Check visible CUDA devices
+nvidia-smi
+```
+
+**Note on sm_120 and PTX JIT:**  
+Even after a clean nightly reinstall, TensorFlow may still rely on PTX JIT for `sm_120` if the
+wheel does not yet embed `sm_120` SASS kernels. If training crashes with an `sm_120`-related LLVM
+or PTX error, the next step is to use the official **NGC TensorFlow container**
+(`nvcr.io/nvidia/tensorflow:xx.xx-tf2-py3`) which is built and tested against the latest CUDA
+and includes Blackwell-native kernels. Note that NGC images require a (free) NGC account.
+
+---
+
 ### `micro-wake-word` — `microwakeword/train.py`: robust NumPy conversion (`_to_numpy`)
 
 **Patch file:** [`patches/micro-wake-word-train-to_numpy.patch`](patches/micro-wake-word-train-to_numpy.patch)
