@@ -184,6 +184,84 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+### NGC TensorFlow Variant (`dev2-ngc`) — CUDA 12.8 / Blackwell Native
+
+**Use case:**  
+NVIDIA Blackwell GPUs (sm_120, e.g. RTX 5070 Ti Laptop) that still hit PTX/LLVM errors with the
+public `tf-nightly` wheel may work correctly with the official NGC TensorFlow container, which is
+built and tested against the latest CUDA and includes Blackwell-native kernels.
+
+#### 1. Log in to NVIDIA NGC (free account required)
+
+```bash
+docker login nvcr.io
+# Username: $oauthtoken
+# Password: <your NGC API key from https://ngc.nvidia.com/setup/api-key>
+```
+
+Your API key is **never stored in the image** — the login only writes a credential to
+`~/.docker/config.json` on the host.
+
+#### 2. Build the NGC variant
+
+```bash
+docker build \
+  -f dockerfile.ngc-tensorflow \
+  -t ghcr.io/omega-sko/microwakeword:dev2-ngc \
+  .
+```
+
+To pin a different NGC TF tag (default is `25.02-tf2-py3`):
+
+```bash
+docker build \
+  --build-arg NGC_TF_TAG=25.01-tf2-py3 \
+  -f dockerfile.ngc-tensorflow \
+  -t ghcr.io/omega-sko/microwakeword:dev2-ngc \
+  .
+```
+
+#### 3. Run the NGC variant
+
+The Dockerfile already sets `TF_VARIANT=ngc` so the setup script will not overwrite the
+container's TensorFlow.  Pass it through at runtime too so it is visible to all scripts:
+
+```bash
+docker run -d \
+  --gpus all \
+  -e TF_VARIANT=ngc \
+  -p 8789:8789 \
+  -v $(pwd)/data:/data \
+  ghcr.io/omega-sko/microwakeword:dev2-ngc
+```
+
+#### 4. First-time setup inside the container
+
+When running `setup_python_venv` inside the NGC container, set `TF_VARIANT=ngc` so that
+TensorFlow is **not** reinstalled from pip (the container TF is used as-is):
+
+```bash
+TF_VARIANT=ngc cli/setup_python_venv --data-dir /data --gpu
+```
+
+All other dependencies (requirements.txt, torch/torchaudio, onnxruntime, keras==3.12.0,
+micro-wake-word, piper-sample-generator) are installed normally.
+
+#### 5. Verify TF build info
+
+```bash
+# Check TF version and CUDA build info
+python -c "import tensorflow as tf; import pprint; print(tf.__version__); pprint.pprint(tf.sysconfig.get_build_info())"
+
+# List detected GPUs
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+
+# Check CUDA/GPU from host
+nvidia-smi
+```
+
+---
+
 ### CUDA 12.8 Runtime Base Image
 
 **Why `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04` instead of conda CUDA:**
