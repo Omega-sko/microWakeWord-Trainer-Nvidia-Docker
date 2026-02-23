@@ -2,8 +2,13 @@
 PROGDIR="$(dirname "$(realpath "$0")")"
 ROOTDIR="$(dirname "${PROGDIR}")"
 
-KNOWN_ARGS=( data-dir python gpu no-gpu )
+KNOWN_ARGS=( data-dir python gpu no-gpu tf-variant tf-blackwell )
 source "${PROGDIR}/shell.functions"
+
+# --tf-blackwell flag is a shorthand for --tf-variant=blackwell
+[ "${TF_BLACKWELL:-}" = "true" ] && TF_VARIANT="blackwell"
+# Default: empty (standard behaviour)
+: "${TF_VARIANT:=}"
 
 if [ ${#UNKNOWN_ARGS[@]} -gt 0 ] ; then
     echo "Unknown argument(s): ${UNKNOWN_ARGS[*]}" >&2
@@ -12,7 +17,7 @@ fi
 
 if [ "${HELP}" == "true" ] ; then
     cat <<EOF >&2
-Usage: setup_python_venv [ --gpu | --no-gpu ] [ --verbose ]
+Usage: setup_python_venv [ --gpu | --no-gpu ] [ --tf-variant=blackwell | --tf-blackwell ] [ --verbose ]
 
 Options:
 --gpu:     Install the GPU-capable versions of packages if available.  This
@@ -21,6 +26,14 @@ Options:
 --no-gpu:  Install the non-GPU-capable versions of packages even if
            GPU-capable packages are available.  This is the default if the script
            detects that a GPU is NOT available.
+
+--tf-variant=blackwell / --tf-blackwell:
+           Install a newer tf-nightly build aimed at NVIDIA Blackwell GPUs
+           (sm_120, RTX 5000 series).  Uses --upgrade to pull the absolute
+           latest tf-nightly[and-cuda] which bundles a CUDA 12.8-compatible
+           ptxas, avoiding the PTX 8.5 vs sm_120 build error.
+           Also sets TF_CUDA_COMPUTE_CAPABILITIES=12.0 at runtime.
+           Default: standard tf-nightly install (unchanged behaviour).
 
 --verbose: Print the detailed "pip install" output.
 
@@ -147,8 +160,27 @@ pip_install -r "${ROOTDIR}/requirements.txt"
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
 echo "   ===== Installing Tensorflow${tfgpu} ====="
 ##### custom change
-pip_install ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
-    "tensorboard-data-server"
+if [ "${TF_VARIANT}" = "blackwell" ] && ${GPU} ; then
+    echo "   [Blackwell mode] Upgrading to latest tf-nightly[and-cuda] for sm_120/CUDA 12.8 support"
+    pip_install --upgrade ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
+        "tensorboard-data-server"
+else
+    pip_install ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
+        "tensorboard-data-server"
+fi
+
+echo "   ===== TensorFlow diagnostics ====="
+python - <<'PY'
+import tensorflow as tf
+print("TF version:", tf.__version__)
+try:
+    bi = tf.sysconfig.get_build_info()
+    print("CUDA version:", bi.get("cuda_version", "n/a"))
+    print("cuDNN version:", bi.get("cudnn_version", "n/a"))
+except Exception as e:
+    print("build_info unavailable:", e)
+print("Physical devices:", tf.config.list_physical_devices())
+PY
 
 ${GPU} && torchgpu='--index-url https://download.pytorch.org/whl/cu129' || torchgpu=""
 echo "   ===== Installing torch and torchaudio ${torchgpu:+[cuda]} ====="

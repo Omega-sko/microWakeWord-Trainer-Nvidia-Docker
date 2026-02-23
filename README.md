@@ -249,4 +249,73 @@ Once those directories exist, `wake_word_sample_trainer` automatically detects t
 - To fully reset this behavior, delete both:
   - `/data/personal_samples` (personal WAVs)
   - `/data/work/personal_augmented_features` (generated personal features)
+
+---
+
+### Blackwell GPU support — `TF_VARIANT=blackwell`
+
+**Problem:**  
+NVIDIA Blackwell GPUs (RTX 5000 series, `sm_120`) require PTX version ≥ 8.7 to compile CUDA kernels.
+The bundled `ptxas` shipped with older `tf-nightly[and-cuda]` packages only supports up to PTX 8.5,
+causing training to crash immediately with:
+
+```
+LLVM ERROR: PTX version 8.5 does not support target 'sm_120'.
+            Minimum required PTX version is 8.7.
+```
+
+**Fix:**  
+Pass `TF_VARIANT=blackwell` (env var) or `--tf-blackwell` / `--tf-variant=blackwell` (CLI arg) when
+running `setup_python_venv`.  This triggers two changes:
+
+1. **`cli/setup_python_venv`** installs `tf-nightly[and-cuda]` with `--upgrade`, pulling the
+   absolute latest nightly build which bundles a CUDA 12.8-compatible `ptxas` (PTX ≥ 8.7).
+2. **`cli/wake_word_sample_trainer`** (when `TF_VARIANT=blackwell` is exported to the environment)
+   additionally sets:
+   - `TF_CUDA_COMPUTE_CAPABILITIES=12.0` — hints TF to compile for sm_120.
+   - `XLA_FLAGS=--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` — tells XLA to use the
+     system/driver `ptxas` if the bundled one is too old (fallback safety net).
+
+**How to activate:**
+
+```bash
+# Option A — environment variable (persists for the session):
+export TF_VARIANT=blackwell
+setup_python_venv --data-dir /data
+
+# Option B — CLI argument:
+setup_python_venv --tf-blackwell --data-dir /data
+# or equivalently:
+setup_python_venv --tf-variant=blackwell --data-dir /data
+```
+
+Then start training as usual — `train_wake_word` will inherit `TF_VARIANT` from the environment:
+
+```bash
+export TF_VARIANT=blackwell
+train_wake_word "hey jarvis"
+```
+
+**Diagnostic commands:**
+
+```bash
+# Check TF version and CUDA build info after setup:
+source /data/.venv/bin/activate
+python -c "
+import tensorflow as tf
+print(tf.__version__)
+print(tf.sysconfig.get_build_info())
+print(tf.config.list_physical_devices('GPU'))
+"
+
+# Confirm ptxas version bundled in the venv:
+find /data/.venv -name ptxas 2>/dev/null | head -1 | xargs -I{} {} --version 2>&1 || echo "ptxas not bundled"
+```
+
+**Notes:**
+- The default install path (without `TF_VARIANT=blackwell`) is unchanged — no impact on non-Blackwell systems.
+- If the upgraded nightly still bundles an old ptxas, the `XLA_FLAGS` fallback will use the NVIDIA
+  system driver's `ptxas` instead (requires CUDA driver ≥ 570 for sm_120 support on the host).
+- On WSL2, `XLA_FLAGS` is already set automatically by the trainer regardless of `TF_VARIANT`.
+
 ---

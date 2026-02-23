@@ -234,6 +234,10 @@ GPU_FALLBACK_MARKERS=(
   "dst tensor is not initialized"
   "failed copying input tensor"
   "_eagerconst"
+  "llvm error"
+  "ptx version"
+  "sm_120"
+  "minimum required ptx"
 )
 
 run_attempt() {
@@ -262,6 +266,19 @@ export TF_XLA_FLAGS="${TF_XLA_FLAGS:---tf_xla_auto_jit=0}"
 export NVIDIA_TF32_OVERRIDE="${NVIDIA_TF32_OVERRIDE:-1}"
 export TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
 export TF_GPU_ALLOCATOR="${TF_GPU_ALLOCATOR:-cuda_malloc_async}"
+
+# Blackwell (sm_120) mode: ensure driver PTXAS fallback and set compute capability
+if [ "${TF_VARIANT:-}" = "blackwell" ]; then
+  export TF_CUDA_COMPUTE_CAPABILITIES="${TF_CUDA_COMPUTE_CAPABILITIES:-12.0}"
+  echo "ℹ️  Blackwell mode: TF_CUDA_COMPUTE_CAPABILITIES=${TF_CUDA_COMPUTE_CAPABILITIES}"
+  # Apply driver-PTXAS fallback unconditionally (not just WSL2) so that even
+  # native Docker on Blackwell can compile kernels when the bundled ptxas is
+  # too old (PTX 8.5 vs sm_120 / PTX >=8.7 required).
+  if [ -z "${XLA_FLAGS:-}" ]; then
+    export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+    echo "ℹ️  Blackwell mode: setting XLA_FLAGS=${XLA_FLAGS}"
+  fi
+fi
 
 if run_attempt "Attempt 1/2: GPU training (allow_growth + cuda_malloc_async)" ; then
   echo "✅ Training complete (GPU path)."
