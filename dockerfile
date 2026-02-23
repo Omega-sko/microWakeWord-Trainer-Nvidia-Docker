@@ -1,12 +1,12 @@
-# Base
-FROM ubuntu:24.04
+# Base — CUDA 12.8 + cuDNN runtime (public, no NGC login required)
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.12 python3.12-venv python3.12-dev python3-pip python-is-python3 \
-    git wget curl unzip ca-certificates nano less \
+    git wget curl unzip ca-certificates nano less perl libtinfo6 \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /data
 
@@ -15,23 +15,6 @@ EXPOSE 8789
 
 # Script root
 WORKDIR /root/mww-scripts
-
-##### custom add
-# Install conda + CUDA 12.5.0
-RUN apt-get update && apt-get install -y --no-install-recommends wget && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-    bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/conda && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    /opt/conda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    /opt/conda/bin/conda install -y -c "nvidia/label/cuda-12.5.0" cuda && \
-    rm Miniconda3-latest-Linux-x86_64.sh
-
-# Set LD_LIBRARY_PATH globally
-ENV LD_LIBRARY_PATH=/opt/conda/lib
-
-# resolve minor warning when entering bash ...
-RUN apt-get update && apt-get install -y libtinfo6 && \
-    rm -f /opt/conda/lib/libtinfo.so.6 /opt/conda/lib/libtinfo.so.6.* 2>/dev/null || true
 
 # Bash environment
 COPY --chown=root:root --chmod=0755 .bashrc /root/
