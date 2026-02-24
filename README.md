@@ -184,6 +184,87 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+### `Dockerfile.source-build` — TensorFlow Built from Source for sm_120 (Blackwell)
+
+For the guaranteed, native `sm_120` (Compute Capability 12.0 — Blackwell / RTX 5000-series)
+experience, use the **source-build image** (`ghcr.io/omega-sko/microwakeword:dev-beta`).
+This image compiles TensorFlow from source during the Docker build with CUDA 12.8 + cuDNN 9
+and embeds `sm_80`, `sm_89`, `sm_90`, and `sm_120` SASS kernels directly — no PTX JIT fall-back.
+
+#### Build the image yourself
+
+```bash
+# Clone the repo and check out the dev-beta branch (or use the published image below)
+git clone https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker
+cd microWakeWord-Trainer-Nvidia-Docker
+
+docker build -f Dockerfile.source-build \
+  --build-arg TF_GIT_TAG=master \
+  --build-arg CUDA_COMPUTE_CAPS=8.0,8.9,9.0,12.0 \
+  -t ghcr.io/omega-sko/microwakeword:dev-beta \
+  .
+```
+
+**Build-host requirements:** 16+ GB RAM · 80+ GB free disk · 8+ CPU cores  
+**Build time:** ~2–6 hours depending on hardware (Bazel artifact cache is reused on re-builds).
+
+#### Build arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `TF_GIT_TAG` | `master` | TensorFlow git tag or branch to build (e.g. `v2.19.0`, `v2.20.0`) |
+| `CUDA_COMPUTE_CAPS` | `8.0,8.9,9.0,12.0` | CUDA Compute Capabilities to embed in the wheel |
+
+#### Pull the pre-built image (GHCR)
+
+```bash
+docker pull ghcr.io/omega-sko/microwakeword:dev-beta
+```
+
+Published automatically by the `publish-ghcr-source-build.yml` workflow on every push to
+the `dev-beta` branch (or via manual workflow dispatch).
+
+#### Run the source-build container
+
+```bash
+docker run -d \
+  --gpus all \
+  -p 8789:8789 \
+  -v $(pwd):/data \
+  ghcr.io/omega-sko/microwakeword:dev-beta
+```
+
+#### Verify sm_120 support inside the container
+
+```python
+python3 -c "
+import tensorflow as tf, pprint
+pprint.pprint(tf.sysconfig.get_build_info())
+# cuda_compute_capabilities must include sm_120.
+# Depending on the TF version the value appears as 'sm_120', '12.0', or plain '120'.
+"
+```
+
+#### How sm_120 works through the whole stack
+
+1. **Docker build (`Dockerfile.source-build`)** — TF is compiled from source.
+   `configure.py --defaults` reads `TF_CUDA_COMPUTE_CAPABILITIES=8.0,8.9,9.0,12.0` and
+   bakes the list into `.tf_configure.bazelrc`.  Bazel then compiles SASS kernels for all
+   listed architectures including `sm_120`.
+
+2. **System Python** — The finished wheel is installed into system Python and also persisted
+   at `/opt/tensorflow-wheel/tensorflow-*.whl`.
+
+3. **User venv (`cli/setup_python_venv`)** — When this script detects
+   `/opt/tensorflow-wheel/tensorflow-*.whl`, it installs that wheel into `/data/.venv`
+   instead of downloading `tf-nightly` from PyPI.  The venv therefore gets the same
+   sm_120-capable build.
+
+4. **Training** — `train_wake_word` → `wake_word_sample_trainer` → TF uses native sm_120
+   SASS kernels; no PTX JIT, no `LLVM ERROR: PTX version X.Y does not support sm_120`.
+
+---
+
 ### CUDA 12.8 Runtime Base Image
 
 **Why `nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04` instead of conda CUDA:**

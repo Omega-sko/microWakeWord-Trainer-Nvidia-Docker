@@ -147,6 +147,11 @@ pip_install -r "${ROOTDIR}/requirements.txt"
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
 echo "   ===== Installing Tensorflow${tfgpu} ====="
 ##### custom change
+# If the image was built from Dockerfile.source-build, a source-compiled wheel
+# lives in /opt/tensorflow-wheel/.  Install that wheel instead of downloading
+# from PyPI so the venv inherits the same sm_120-capable TF as the system Python.
+TF_SOURCE_WHEEL="$(ls /opt/tensorflow-wheel/tensorflow-*.whl 2>/dev/null | head -1)"
+
 if ${GPU} && [ "${TF_VARIANT:-}" = "blackwell" ] ; then
     echo "   ===== TF_VARIANT=blackwell: clean reinstall of TensorFlow for Blackwell (sm_120) ====="
     TF_PKGS="tf-nightly tensorflow tensorflow-gpu ai_edge_litert tensorboard tensorboard-data-server"
@@ -159,6 +164,19 @@ if ${GPU} && [ "${TF_VARIANT:-}" = "blackwell" ] ; then
 import tensorflow as tf
 print("tf.__version__:", tf.__version__)
 import pprint
+pprint.pprint(tf.sysconfig.get_build_info())
+print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
+PY
+elif [ -n "${TF_SOURCE_WHEEL}" ] ; then
+    echo "   ===== Source-built TF wheel detected — installing ${TF_SOURCE_WHEEL} ====="
+    TF_PKGS="tf-nightly tensorflow tensorflow-gpu"
+    # shellcheck disable=SC2086
+    pip uninstall -y $TF_PKGS 2>/dev/null || true
+    pip_install "${TF_SOURCE_WHEEL}" ai_edge_litert "tensorboard" "tensorboard-data-server"
+    echo "   ===== TF build info ====="
+    python - <<'PY'
+import tensorflow as tf, pprint
+print("tf.__version__:", tf.__version__)
 pprint.pprint(tf.sysconfig.get_build_info())
 print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
 PY

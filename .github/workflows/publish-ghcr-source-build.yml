@@ -1,0 +1,111 @@
+name: Build and publish source-build Docker image (sm_120 / Blackwell)
+
+# Builds TensorFlow from source with native sm_120 (CC 12.0) support and
+# publishes the result to GHCR as :dev-beta.
+#
+# ⚠️  Resource note:
+#   A TF source build requires ~80 GB disk, 16+ GB RAM, and 8+ CPU cores.
+#   Standard GitHub-hosted runners (2 cores / 7 GB RAM / ~25 GB disk) are NOT
+#   sufficient for a full build.  Options:
+#     • Use a self-hosted runner with adequate resources.
+#     • Switch to a larger GitHub-hosted runner (e.g. ubuntu-latest-16-cores).
+#       Uncomment the alternative `runs-on:` line in the job definition below.
+#     • Build locally and push the image manually.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tf_git_tag:
+        description: "TensorFlow git tag / branch (e.g. master, v2.19.0, v2.20.0)"
+        required: false
+        default: "master"
+        type: string
+      cuda_compute_caps:
+        description: "CUDA Compute Capabilities to embed (comma-separated)"
+        required: false
+        default: "8.0,8.9,9.0,12.0"
+        type: string
+      fresh:
+        description: "Fresh rebuild (disable Buildx / Bazel cache)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  push:
+    branches: ["dev-beta"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-source:
+    # Standard runner — sufficient only for testing the Dockerfile syntax.
+    # For a real TF source build, replace with a self-hosted or large runner:
+    #   runs-on: [self-hosted, linux, x64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Free disk space (critical for TF source build)
+        run: |
+          set -euxo pipefail
+          echo "=== Disk before ==="
+          df -h
+
+          # Remove large unused toolchain directories on GitHub-hosted runners
+          sudo rm -rf /usr/local/lib/android      || true
+          sudo rm -rf /usr/share/dotnet            || true
+          sudo rm -rf /opt/ghc                     || true
+          sudo rm -rf /usr/local/.ghcup            || true
+          sudo rm -rf /opt/hostedtoolcache         || true
+          sudo rm -rf /usr/share/swift             || true
+          sudo rm -rf /usr/local/share/boost       || true
+          sudo rm -rf /usr/lib/jvm                 || true
+          sudo apt-get clean                       || true
+          docker system prune -af                  || true
+
+          echo "=== Disk after ==="
+          df -h
+
+      - name: Resolve build args
+        id: args
+        run: |
+          echo "tf_git_tag=${{ github.event.inputs.tf_git_tag || 'master' }}"         >> "$GITHUB_OUTPUT"
+          echo "cuda_compute_caps=${{ github.event.inputs.cuda_compute_caps || '8.0,8.9,9.0,12.0' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push (source-build)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.source-build
+          push: true
+          tags: ghcr.io/omega-sko/microwakeword:dev-beta
+          build-args: |
+            TF_GIT_TAG=${{ steps.args.outputs.tf_git_tag }}
+            CUDA_COMPUTE_CAPS=${{ steps.args.outputs.cuda_compute_caps }}
+
+          # Always pull the newest base images
+          pull: true
+
+          # Disable cache only on explicit fresh builds
+          no-cache: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.fresh == 'true' }}
+
+          # Scope the GHA cache separately from the standard-build cache
+          cache-from: type=gha,scope=source-build
+          cache-to: type=gha,mode=max,scope=source-build

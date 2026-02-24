@@ -1,0 +1,188 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# Dockerfile.source-build
+#
+# Builds TensorFlow from source targeting CUDA 12.8 + cuDNN 9 with native
+# sm_120 (Compute Capability 12.0 — Blackwell / RTX 5000-series) support.
+#
+# Build command:
+#   docker build -f Dockerfile.source-build \
+#     [--build-arg TF_GIT_TAG=master] \
+#     [--build-arg CUDA_COMPUTE_CAPS=8.0,8.9,9.0,12.0] \
+#     -t ghcr.io/omega-sko/microwakeword:dev-beta .
+#
+# Build requirements: 16+ GB RAM, 80+ GB free disk, 8+ CPU cores recommended.
+# Build time: ~2–6 hours depending on hardware.
+#
+# Verify sm_120 inside the finished container:
+#   python3 -c "import tensorflow as tf, pprint; \
+#               pprint.pprint(tf.sysconfig.get_build_info())"
+#   → 'cuda_compute_capabilities' must include 'sm_120' / '12.0'
+# =============================================================================
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1 — Build TensorFlow from source
+#
+# Uses the CUDA *-devel image which ships CUDA headers, device libs, cuDNN
+# development headers/libraries, and the nvcc toolchain — everything needed
+# to compile TF with CUDA support.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04 AS tf-builder
+
+# TF release tag (e.g. v2.19.0, v2.20.0) or "master" for the latest nightly.
+ARG TF_GIT_TAG=master
+
+# Embedded CUDA Compute Capabilities (comma-separated).
+#   8.0  → Ampere  (A100, A10, RTX 3090)
+#   8.9  → Ada Lovelace (RTX 4xxx)
+#   9.0  → Hopper  (H100)
+#  12.0  → Blackwell (RTX 5xxx)  ← sm_120
+ARG CUDA_COMPUTE_CAPS=8.0,8.9,9.0,12.0
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── Build toolchain & utilities ───────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+        python3-pip python-is-python3 \
+        git wget curl unzip ca-certificates \
+        build-essential patch patchelf \
+        clang-17 clang++-17 llvm-17 lld-17 \
+        openjdk-21-jdk-headless \
+ && update-alternatives \
+        --install /usr/bin/clang   clang   /usr/bin/clang-17   100 \
+ && update-alternatives \
+        --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ── Bazelisk — reads .bazelversion from the TF repo and fetches the right Bazel
+RUN wget -q \
+      https://github.com/bazelbuild/bazelisk/releases/download/v1.25.0/bazelisk-linux-amd64 \
+      -O /usr/local/bin/bazel \
+ && chmod +x /usr/local/bin/bazel
+
+# ── Isolated Python build environment ────────────────────────────────────────
+RUN python3.12 -m venv /opt/tf-build-venv
+ENV PATH="/opt/tf-build-venv/bin:${PATH}"
+RUN pip install --upgrade pip wheel setuptools 'numpy<2'
+
+# ── Clone TensorFlow ──────────────────────────────────────────────────────────
+RUN git clone --depth=1 --branch "${TF_GIT_TAG}" \
+      https://github.com/tensorflow/tensorflow.git /opt/tensorflow
+
+WORKDIR /opt/tensorflow
+
+# ── Non-interactive configure ─────────────────────────────────────────────────
+# configure.py reads these environment variables and writes .tf_configure.bazelrc
+# without any interactive prompts when --defaults is passed.
+ENV PYTHON_BIN_PATH=/opt/tf-build-venv/bin/python3 \
+    USE_DEFAULT_PYTHON_LIB_PATH=1 \
+    TF_NEED_CUDA=1 \
+    TF_CUDA_VERSION=12 \
+    TF_CUDNN_VERSION=9 \
+    TF_CUDA_COMPUTE_CAPABILITIES=${CUDA_COMPUTE_CAPS} \
+    CUDA_TOOLKIT_PATH=/usr/local/cuda \
+    CUDNN_INSTALL_PATH=/usr \
+    TF_CUDA_CLANG=1 \
+    CLANG_CUDA_COMPILER_PATH=/usr/bin/clang \
+    TF_NEED_ROCM=0 \
+    TF_NEED_MPI=0 \
+    CC=/usr/bin/clang \
+    CXX=/usr/bin/clang++
+
+RUN python configure.py --defaults && \
+    # Belt-and-suspenders: ensure compute capabilities land in bazelrc.
+    # $TF_CUDA_COMPUTE_CAPABILITIES is set from the CUDA_COMPUTE_CAPS ARG above.
+    grep -q "TF_CUDA_COMPUTE_CAPABILITIES" .tf_configure.bazelrc || \
+    echo "build --action_env TF_CUDA_COMPUTE_CAPABILITIES=\"${TF_CUDA_COMPUTE_CAPABILITIES}\"" \
+         >> .tf_configure.bazelrc
+
+# ── Bazel build ───────────────────────────────────────────────────────────────
+# --mount=type=cache persists the Bazel artifact cache across Docker build
+# invocations (BuildKit), dramatically speeding up incremental re-builds.
+#
+# --config=cuda          Enable CUDA GPU kernels
+# --define=no_nccl_support=true  Skip NCCL (multi-GPU comms not needed here;
+#                                saves ~10 min and several GB of build space)
+# --jobs=HOST_CPUS*.75   Use 75 % of available CPU cores
+# --local_ram_resources  Cap per-action RAM to 60 % of host RAM
+RUN --mount=type=cache,target=/root/.cache/bazel \
+    bazel build \
+      --config=cuda \
+      --define=no_nccl_support=true \
+      --jobs=HOST_CPUS*.75 \
+      --local_ram_resources=HOST_RAM*.60 \
+      --action_env=TF_CUDA_COMPUTE_CAPABILITIES="${TF_CUDA_COMPUTE_CAPABILITIES}" \
+      //tensorflow/tools/pip_package:wheel \
+ && mkdir /dist \
+ && cp bazel-bin/tensorflow/tools/pip_package/wheel_house/tensorflow-*.whl /dist/
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2 — Lean runtime image (same base as the standard dockerfile)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── System deps (matches dockerfile) ─────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+        python3-pip python-is-python3 \
+        git wget curl unzip ca-certificates nano less perl libtinfo6 \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /data
+
+# ── Keep the wheel available for setup_python_venv (venv installs) ───────────
+# setup_python_venv checks /opt/tensorflow-wheel/ and uses the wheel there
+# instead of downloading tf-nightly from PyPI — ensures the venv also gets
+# the sm_120-capable build.
+COPY --from=tf-builder /dist /opt/tensorflow-wheel
+
+# ── Install TF wheel + companion packages into system Python ──────────────────
+# Remove any old TF packages first (multi-arch runners may have pre-installed
+# stubs that conflict with a locally-built wheel).
+RUN pip uninstall -y tensorflow tensorflow-gpu tf-nightly 2>/dev/null || true \
+ && pip install --no-cache-dir \
+      /opt/tensorflow-wheel/tensorflow-*.whl \
+      ai_edge_litert \
+      tensorboard \
+      tensorboard-data-server
+
+# ── Verify sm_120 (CC 12.0) was compiled in ───────────────────────────────────
+RUN python3 - <<'PY'
+import tensorflow as tf, pprint
+info = tf.sysconfig.get_build_info()
+caps = info.get("cuda_compute_capabilities", [])
+print("TF version:", tf.__version__)
+pprint.pprint({"cuda_compute_capabilities": caps})
+# Accept 'sm_120', '12.0', or plain '120' (different TF versions use different formats)
+caps_flat = "".join(str(c).replace("sm_", "").replace(".", "") for c in caps)
+assert "120" in caps_flat, "sm_120 (CC 12.0) NOT found. Got: " + str(caps)
+print("OK: sm_120 (CC 12.0) verified")
+PY
+
+# Recorder port
+EXPOSE 8789
+
+WORKDIR /root/mww-scripts
+
+COPY --chown=root:root --chmod=0755 .bashrc /root/
+
+COPY --chown=root:root --chmod=0755 \
+    train_wake_word \
+    run_recorder.sh \
+    recorder_server.py \
+    requirements.txt \
+    /root/mww-scripts/
+
+COPY --chown=root:root patches/ /root/mww-scripts/patches/
+
+COPY --chown=root:root cli/ /root/mww-scripts/cli/
+
+RUN chmod -R a+x /root/mww-scripts/cli
+
+COPY --chown=root:root --chmod=0644 static/index.html /root/mww-scripts/static/index.html
+
+CMD ["/bin/bash", "-lc", "/root/mww-scripts/run_recorder.sh"]
