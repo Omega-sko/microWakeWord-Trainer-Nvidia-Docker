@@ -145,27 +145,30 @@ echo "   ===== Installing common requirements ====="
 pip_install -r "${ROOTDIR}/requirements.txt"
 
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
-echo "   ===== Installing Tensorflow${tfgpu} ====="
-##### custom change
-if ${GPU} && [ "${TF_VARIANT:-}" = "blackwell" ] ; then
-    echo "   ===== TF_VARIANT=blackwell: clean reinstall of TensorFlow for Blackwell (sm_120) ====="
-    TF_PKGS="tf-nightly tensorflow tensorflow-gpu ai_edge_litert tensorboard tensorboard-data-server"
-    # shellcheck disable=SC2086
-    pip uninstall -y $TF_PKGS 2>/dev/null || true
-    pip_install --no-cache-dir --upgrade --pre ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
-        "tensorboard-data-server"
-    echo "   ===== TF build info ====="
-    python - <<'PY'
+echo "   ===== Installing Blackwell TensorFlow Wheel ====="
+TF_WHEEL_URL="https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/releases/download/blackwell-tf-wheel-1/tensorflow-2.20.0dev0+selfbuild-cp312-cp312-linux_x86_64.whl"
+TF_WHEEL_FILE="${DATA_DIR}/tensorflow-2.20.0dev0+selfbuild-cp312-cp312-linux_x86_64.whl"
+
+# Download das Wheel nur falls noch nicht vorhanden
+if [ ! -f "$TF_WHEEL_FILE" ]; then
+    wget -O "$TF_WHEEL_FILE" "$TF_WHEEL_URL"
+fi
+
+# Alles alte TF deinstallieren
+pip uninstall -y tensorflow tf-nightly tensorflow-gpu ai_edge_litert tensorboard tensorboard-data-server || true
+
+# Installiere das Blackwell Wheel explizit
+pip_install "$TF_WHEEL_FILE"
+pip_install ai_edge_litert tensorboard tensorboard-data-server
+
+echo "   ===== TF build info ====="
+python - <<'PY'
 import tensorflow as tf
 print("tf.__version__:", tf.__version__)
 import pprint
 pprint.pprint(tf.sysconfig.get_build_info())
 print("Physical GPUs:", tf.config.list_physical_devices('GPU'))
 PY
-else
-    pip_install ai_edge_litert "tf-nightly[and-cuda]" "tensorboard" \
-        "tensorboard-data-server"
-fi
 
 ${GPU} && torchgpu='--index-url https://download.pytorch.org/whl/cu129' || torchgpu=""
 echo "   ===== Installing torch and torchaudio ${torchgpu:+[cuda]} ====="
