@@ -44,19 +44,19 @@ docker run -d \
 
 ---
 
-###If you're using docker.desktop on Windows, then:
+### If you're using docker.desktop on Windows, then:
 
-1. First, initiate an image pull via PowerShell, e.g., (for my repository):
+**1. First, initiate an image pull via PowerShell, e.g., (for my repository):**
 
 ```bash
 docker pull ghcr.io/omega-sko/microwakeword:latest
 ```
 
-2. Next, create a local directory where the local data will be mounted and where the data required for the recorder will be stored.
+**2. Next, create a local directory where the local data will be mounted and where the data required for the recorder will be stored.**
 
 For me, for example, "E:\Docker\microwakeword"
 
-3. Then, place a file in this directory named "docker-compose.yml".
+**3. Then, place a file in this directory named "docker-compose.yml".**
 
 The contents of this file will create the container and start it.
 Here's the content (image is in my case), (volumes: is the directory I created; it needs to be adjusted to your own, but the ":/data" after the directory path must remain as is):
@@ -84,7 +84,7 @@ services:
               capabilities: ["gpu"]
 ```
 
-4. Once the pull from Step 1 is complete, then also via Create/start the container using PowerShell:
+**4. Once the pull from Step 1 is complete, then also via Create/start the container using PowerShell:**
 
 ```bash
 docker compose -f docker-docker-compose.yml up
