@@ -305,7 +305,7 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ----
 
-_For more details or change history, see [dev-betabackup](https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/commits/dev-betaBackup) and the relevant scripts._
+_For more details or change history, see [history of commits](https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/commits/dev-betaBackup) and the relevant scripts._
 
 ---
 
