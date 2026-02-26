@@ -233,7 +233,7 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
-#### GPU/Blackwell Support & TensorFlow
+#### GPU/Blackwell Support & TensorFlow, "for RTX 50xx" use "sm_120", I hope it's backwards compatible, but I haven't been able to test it
 
 - **Base Image:**  
   The Dockerfile now uses the NVIDIA developer image:
