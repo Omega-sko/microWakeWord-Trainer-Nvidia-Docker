@@ -72,7 +72,7 @@ services:
     ports:
       - "8888:8789"
     volumes:
-      - "E:/Docker/mWW-omega:/data"
+      - "E:/Docker/microwakeword:/data"
     entrypoint: ["bash"]
     command: ["-lc", "./run_recorder.sh"]
     deploy:
