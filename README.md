@@ -184,7 +184,79 @@ right after cloning — so they are re-applied automatically whenever `/data/too
 
 ---
 
+#### GPU/Blackwell Support & TensorFlow
 
+- **Base Image:**  
+  The Dockerfile now uses the NVIDIA developer image:
+  ```
+  FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+  ```
+  > This is essential to allow TensorFlow to dynamically generate PTX/kernels for sm_120/Blackwell GPUs.  
+  The `devel` variant includes ptxas, nvcc, and nvlink (not present in the runtime image!).
+
+- **TensorFlow Installation:**  
+  Setup installs the native TensorFlow custom wheel (Blackwell / sm_120-enabled) directly from a GitHub Release:
+  ```
+  https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/releases/download/blackwell-tf-wheel-1/tensorflow-2.20.0dev0+selfbuild-cp312-cp312-linux_x86_64.whl
+  ```
+  - The wheel installation occurs **after** requirements.txt, ensuring the required versions for `numpy` and `tb-nightly`:
+    ```bash
+    pip uninstall -y numpy tb-nightly
+    pip install "numpy>=1.26.0,<2.2.0"
+    pip install "tb-nightly~=2.19.0.a"
+    pip install --force-reinstall "$TF_WHEEL_FILE"
+    ```
+  - Follow-up pip installs for ai_edge_litert, tensorboard, and tensorboard-data-server occur after the custom wheel.
+
+- **Dependency Management:**  
+  - Any Python dependencies potentially installed at too-high versions during requirements.txt installation are explicitly "downgraded" right before TensorFlow is installed.
+  - The installation of micro-wake-word as editable (`pip install -e ...`) uses the already installed TensorFlow version, with no patching to tf-nightly.
+
+- **Patch Removal:**  
+  - The line patching `setup.py` in micro-wake-word (replacing `"tensorflow>=2.16"` with `"tf-nightly"`) was **removed**.  
+  micro-wake-word now always uses the TensorFlow version already present in the virtualenv.
+
+- **GPU Training Fix:**  
+  - The error `No PTX compilation provider is available... Couldn’t find a suitable version of ptxas/nvlink` was resolved by switching the base image to the devel variant.
+
+---
+
+#### External Assets/Datasets
+
+- All datasets and models are loaded explicitly via external URLs:
+  - **HuggingFace (FMA, Negative Sets):**
+    - `https://huggingface.co/datasets/mchl914/fma_xsmall/resolve/main/fma_xs.zip`
+    - `https://huggingface.co/datasets/kahrendt/microwakeword/resolve/main/dinner_party.zip` (and others)
+  - **MIT_RIR:**  
+    - `https://mcdermottlab.mit.edu/Reverb/IRMAudio/Audio.zip`
+  - **Piper Sample Generator Model:**  
+    - `https://github.com/rhasspy/piper-sample-generator/releases/download/v2.0.0/en_US-libritts_r-medium.pt`
+  - **micro-wake-word** is cloned from your Omega-sko fork and installed in development mode.
+
+- **Note:**  
+  All above-mentioned data/model URLs can be hosted as GitHub Release Assets or forks in your own GitHub namespace, eliminating external dependency.
+
+---
+
+#### Python/CLI Patches & Robustness
+
+- **TensorFlow Import in training and augmentation scripts** was hardened:
+  - All ImportErrors (due to, e.g., incompatible TF-Lite metrics, build incompatibility) are explicitly caught (`try/except`) and trigger fallback/continue with CPU and a warning.
+  - sm_120 GPU training mode is fully functional when the image and setup are correct.
+
+---
+
+#### Miscellaneous
+
+- **WSL2 Compatibility:**  
+  The setup detects and enables GPU support on WSL2, adjusts environment variables (XLA_FLAGS, LD_LIBRARY_PATH), and CUDA visibility.
+
+- **Best Practices:**  
+  It is recommended to provide all forks and models as your own assets, and to update all script and installation paths to point to your releases/forks for complete autonomy.
+
+----
+
+_For more details or change history, see [dev-betabackup](https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/tree/dev-betabackup) and the relevant scripts._
 
 ---
 
