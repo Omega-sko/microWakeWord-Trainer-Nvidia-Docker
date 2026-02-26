@@ -44,7 +44,7 @@ docker run -d \
 
 ---
 
-If you're using docker.desktop on Windows, then:
+###If you're using docker.desktop on Windows, then:
 
 1. First, initiate an image pull via PowerShell, e.g., (for my repository):
 
