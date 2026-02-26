@@ -96,16 +96,28 @@ os.environ["GLOG_minloglevel"] = "9"
 os.environ["GRPC_VERBOSITY"] = "ERROR"
 
 print("   Loading Tensorflow")
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ImportError as e:
+    print("TensorFlow import failed, possibly due to missing metrics_wrapper or build incompatibility.")
+    print("Error:", e)
+    tf = None
+except Exception as e:
+    print("TensorFlow failed to load:", e)
+    tf = None
 
-print("   GPU memory config")
-for g in tf.config.list_physical_devices("GPU"):
-    try:
-        tf.config.experimental.set_memory_growth(g, True)
-    except Exception:
-        pass
-print(f"   GPUs: {tf.config.list_physical_devices('GPU')}")
-gc.collect()
+if tf:
+    print("   GPU memory config")
+    for g in tf.config.list_physical_devices("GPU"):
+        try:
+            tf.config.experimental.set_memory_growth(g, True)
+        except Exception:
+            pass
+    print(f"   GPUs: {tf.config.list_physical_devices('GPU')}")
+    gc.collect()
+else:
+    print("⚠️  TensorFlow is not available! Augmentation will run in CPU-only mode or skipped.")
+    # ggf. nicht abbrechen, sondern CPU/alternative Logik verwenden
 
 import numpy as np
 import librosa
