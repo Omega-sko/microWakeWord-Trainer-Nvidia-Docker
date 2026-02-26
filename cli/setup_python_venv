@@ -144,6 +144,11 @@ echo "   ===== Installing common requirements ====="
 # requirements.txt lives in repo root now
 pip_install -r "${ROOTDIR}/requirements.txt"
 
+# Immer die TensorFlow-kompatible numpy-/tb-nightly-Version forcieren!
+pip uninstall -y numpy tb-nightly
+pip install "numpy>=1.26.0,<2.2.0"
+pip install "tb-nightly~=2.19.0.a"
+
 ${GPU} && tfgpu='[and-cuda]' || tfgpu=""
 echo "   ===== Installing Blackwell TensorFlow Wheel ====="
 TF_WHEEL_URL="https://github.com/Omega-sko/microWakeWord-Trainer-Nvidia-Docker/releases/download/blackwell-tf-wheel-1/tensorflow-2.20.0dev0+selfbuild-cp312-cp312-linux_x86_64.whl"
@@ -186,7 +191,7 @@ fi
 echo ""
 echo "   Patching microwakeword to require tf-nightly"
 echo ""
-sed -i 's/"tensorflow>=2.16"/"tf-nightly"/g' "${MWW}/setup.py"
+# sed -i 's/"tensorflow>=2.16"/"tf-nightly"/g' "${MWW}/setup.py"
 
 # Apply the _to_numpy patch so that model.evaluate() results are handled robustly
 # regardless of whether TF returns a Tensor or a plain NumPy array.
