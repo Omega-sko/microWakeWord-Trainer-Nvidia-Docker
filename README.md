@@ -40,11 +40,60 @@ docker run -d \
 **What these flags do:**
 - `--gpus all` → Enables GPU acceleration  
 - `-p 8888:8888` → Exposes the Recorder + Trainer WebUI  
-- `-v $(pwd):/data` → Persists all models, datasets, and cache  
+- `-v $(pwd):/data` → Persists all models, datasets, and cache
+
+---
+
+If you're using docker.desktop on Windows, then:
+
+1. First, initiate an image pull via PowerShell, e.g., (for my repository):
+
+```bash
+docker pull ghcr.io/omega-sko/microwakeword:latest
+```
+
+2. Next, create a local directory where the local data will be mounted and where the data required for the recorder will be stored.
+
+For me, for example, "E:\Docker\microwakeword"
+
+3. Then, place a file in this directory named "docker-compose.yml".
+
+The contents of this file will create the container and start it.
+Here's the content (image is in my case), (volumes: is the directory I created; it needs to be adjusted to your own, but the ":/data" after the directory path must remain as is):
+
+```bash
+services:
+  microwakeword:
+    image: ghcr.io/omega-sko/microwakeword:latest
+    container_name: microwakeword-recorder-omega
+    environment:
+      - REC_PORT=8789
+      - CUDA_VISIBLE_DEVICES=-1
+    ports:
+      - "8888:8789"
+    volumes:
+      - "E:/Docker/mWW-omega:/data"
+    entrypoint: ["bash"]
+    command: ["-lc", "./run_recorder.sh"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+```
+
+4. Once the pull from Step 1 is complete, then also via Create/start the container using PowerShell:
+
+```bash
+docker compose -f docker-docker-compose.yml up
+```
 
 ---
 
 ### Open the Recorder WebUI
+Once the container has started successfully, you can open the recorder in your web browser.
 
 Open your browser and go to:
 
