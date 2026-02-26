@@ -11,8 +11,8 @@ on:
         options:
           - "false"
           - "true"
-  push:
-    branches: ["main", "dev"]
+#  push:
+#    branches: ["main", "dev"]
 
 permissions:
   contents: read
