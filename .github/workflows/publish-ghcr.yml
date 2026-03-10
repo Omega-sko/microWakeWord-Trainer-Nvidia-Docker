@@ -1,0 +1,84 @@
+name: Build and publish Docker image to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      fresh:
+        description: "Fresh rebuild (disable Buildx cache / force full rebuild)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  #push:
+    #branches: ["main", "dev"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: meta
+        run: |
+          IMAGE="ghcr.io/omega-sko/microwakeword"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "tags=${IMAGE}:latest" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
+            echo "tags=${IMAGE}:dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${IMAGE}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Free disk space (runner)
+        run: |
+          set -euxo pipefail
+          echo "Disk before:"
+          df -h
+
+          # Common huge directories on GitHub-hosted ubuntu runners
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+
+          # Remove unused docker data
+          docker system prune -af || true
+
+          echo "Disk after:"
+          df -h
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+          # Always try to pull newest base image for the tag (e.g. tensorflow/tensorflow:nightly-gpu)
+          pull: true
+
+          # If fresh=true => disable cache and rebuild everything
+          no-cache: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.fresh == 'true' }}
+
+          # Keep cache for normal builds (cached)
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
