@@ -45,11 +45,21 @@ cd "${DATA_DIR}"
 
 [ -z "${GPU}" ] && {
     GPU=false
-    [ -c /dev/nvidiactl ] && {
+    if [ -c /dev/nvidiactl ] ; then
         GPU=true
-        echo "   Nvidia GPU detected"
-    }
+        echo "   Nvidia GPU detected (/dev/nvidiactl present)"
+    elif command -v nvidia-smi >/dev/null 2>&1 \
+         && nvidia-smi --query-gpu=name --format=csv,noheader >/dev/null 2>&1 ; then
+        GPU=true
+        echo "   Nvidia GPU detected via nvidia-smi (/dev/nvidiactl not found as character device)"
+    else
+        echo "   No Nvidia GPU detected (/dev/nvidiactl absent; nvidia-smi unavailable or returned no GPU)"
+    fi
 }
+
+# Log /dev/nvidia* device file presence for diagnostics.
+echo "   Device check: /dev/nvidiactl=$([ -c /dev/nvidiactl ] && echo present || echo absent)" \
+     " /dev/nvidia0=$([ -e /dev/nvidia0 ] && echo present || echo absent)"
 
 "${GPU}" || export CUDA_VISIBLE_DEVICES=-1
 
@@ -65,10 +75,13 @@ GPU_COMPUTE_CAPABILITY=""
 IS_BLACKWELL=false
 if ${GPU} ; then
     GPU_COMPUTE_CAPABILITY="$(detect_gpu_compute_capability || true)"
+    echo "   Detected GPU compute capability: ${GPU_COMPUTE_CAPABILITY:-unknown}"
     case "${GPU_COMPUTE_CAPABILITY}" in
         12.*) IS_BLACKWELL=true ;;
     esac
-    ${IS_BLACKWELL} && echo "   Blackwell GPU detected (compute capability ${GPU_COMPUTE_CAPABILITY})"
+    if ${IS_BLACKWELL} ; then
+        echo "   Blackwell GPU detected (compute capability ${GPU_COMPUTE_CAPABILITY})"
+    fi
 fi
 
 VENV="${DATA_DIR}/.venv"
@@ -166,12 +179,24 @@ if ${GPU} && ${IS_BLACKWELL} ; then
     DEFAULT_TF_SPEC="tf-nightly${tfgpu}"
     # Let tf-nightly resolve a compatible TensorBoard dependency by default.
     default_tensorboard_specs=()
-else
+    _tf_reason="Blackwell GPU detected (compute capability ${GPU_COMPUTE_CAPABILITY})"
+elif ${GPU} ; then
     DEFAULT_TF_SPEC="tensorflow${tfgpu}==2.20.0"
     default_tensorboard_specs=( "tensorboard==2.20.0" "tensorboard-data-server==0.7.2" )
+    _tf_reason="non-Blackwell GPU detected (compute capability ${GPU_COMPUTE_CAPABILITY:-unknown})"
+else
+    DEFAULT_TF_SPEC="tensorflow==2.20.0"
+    default_tensorboard_specs=( "tensorboard==2.20.0" "tensorboard-data-server==0.7.2" )
+    _tf_reason="no GPU detected (CPU-only)"
 fi
 
-TF_SPEC="${MWW_TF_SPEC:-${DEFAULT_TF_SPEC}}"
+if [ -n "${MWW_TF_SPEC:-}" ] ; then
+    TF_SPEC="${MWW_TF_SPEC}"
+    echo "   ⚠️  MWW_TF_SPEC override active: using '${TF_SPEC}' (would have chosen '${DEFAULT_TF_SPEC}' for ${_tf_reason})"
+else
+    TF_SPEC="${DEFAULT_TF_SPEC}"
+    echo "   Chosen TF spec: '${TF_SPEC}' (reason: ${_tf_reason})"
+fi
 declare -a tf_install_specs=( ai_edge_litert "${TF_SPEC}" )
 
 if [ -n "${MWW_TENSORBOARD_SPEC:-}" ] ; then

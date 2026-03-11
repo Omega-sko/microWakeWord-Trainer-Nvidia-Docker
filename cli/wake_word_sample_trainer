@@ -76,6 +76,11 @@ case "${GPU_COMPUTE_CAPABILITY}" in
   12.*) IS_BLACKWELL="true" ;;
 esac
 
+# Log GPU device file presence for diagnostics.
+echo "   Device check: /dev/nvidiactl=$([ -c /dev/nvidiactl ] && echo present || echo absent)" \
+     " /dev/nvidia0=$([ -e /dev/nvidia0 ] && echo present || echo absent)"
+[ -n "${GPU_COMPUTE_CAPABILITY}" ] && echo "   Detected compute capability: ${GPU_COMPUTE_CAPABILITY}"
+
 ALLOW_CPU_FALLBACK_DEFAULT="true"
 ALLOW_CPU_FALLBACK="$(normalize_bool "${MWW_ALLOW_CPU_FALLBACK:-${ALLOW_CPU_FALLBACK_DEFAULT}}")"
 
@@ -311,9 +316,14 @@ export TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
 if [ "${IS_BLACKWELL}" = "true" ]; then
   # TF 2.20 + Blackwell is often unstable with cuda_malloc_async.
   unset TF_GPU_ALLOCATOR
+  echo "   TF_GPU_ALLOCATOR: unset (BFC allocator, Blackwell compatibility)"
 else
   export TF_GPU_ALLOCATOR="${TF_GPU_ALLOCATOR:-cuda_malloc_async}"
+  echo "   TF_GPU_ALLOCATOR=${TF_GPU_ALLOCATOR}"
 fi
+echo "   XLA_FLAGS=${XLA_FLAGS:-<unset>}"
+echo "   TF_XLA_FLAGS=${TF_XLA_FLAGS:-<unset>}"
+echo "   CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<unset (all GPUs visible)>}"
 
 TRAINING_DONE="false"
 
