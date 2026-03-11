@@ -161,7 +161,60 @@ Then restart the container.
 
 ---
 
-## 🙌 Credits
+## ⚡ Blackwell / RTX 50-series GPU Support
+
+NVIDIA Blackwell GPUs (RTX 5070, 5080, 5090, etc.) with **compute capability 12.x** are supported with automatic compatibility handling.
+
+### What happens automatically
+
+- **TensorFlow package**: When a Blackwell GPU is detected during environment setup, `tf-nightly[and-cuda]` is installed instead of the stable `tensorflow==2.20.0`. This is because TF 2.20.0 does not ship pre-compiled CUDA kernels for compute capability 12.x, causing 30+ minute JIT compile times and potential runtime failures.
+- **Allocator**: The `cuda_malloc_async` allocator is disabled on Blackwell (uses BFC allocator instead) to avoid known instability with TF 2.20 + Blackwell.
+- **XLA**: Auto-JIT XLA compilation is disabled via `TF_XLA_FLAGS=--tf_xla_auto_jit=0`, which is safer for this architecture.
+- **PTX JIT fallback**: `--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found` is set automatically, allowing the driver to JIT-compile PTX when `ptxas` is unavailable.
+- **Retry logic**: Training will automatically retry with progressively more conservative GPU profiles before falling back to CPU.
+
+### Recommended Docker flags
+
+Always pass `--gpus all` when running the container:
+
+```bash
+docker run -d \
+  --gpus all \
+  -p 8888:8888 \
+  -v $(pwd):/data \
+  ghcr.io/tatertotterson/microwakeword:latest
+```
+
+### Environment variable overrides
+
+| Variable | Description | Default |
+|---|---|---|
+| `MWW_TF_SPEC` | Override TensorFlow package spec, e.g. `tf-nightly[and-cuda]` | Auto-detected |
+| `MWW_KERAS_SPEC` | Override Keras package spec, e.g. `keras==3.12.0` | Auto-detected |
+| `MWW_ALLOW_CPU_FALLBACK` | Allow CPU fallback if GPU training fails (`true`/`false`) | `true` |
+| `MWW_TENSORBOARD_SPEC` | Comma-separated TensorBoard specs, e.g. `tensorboard==2.20.0,tensorboard-data-server==0.7.2` | Auto-detected |
+
+### First-run note
+
+On Blackwell, the first training run **will be slower** than subsequent runs because TensorFlow must JIT-compile GPU kernels via PTX. This is a one-time cost per session. You may see a message like:
+
+> `TensorFlow was not built with CUDA kernel binaries compatible with compute capability 12.0. CUDA kernels will be jit-compiled from PTX, which could take 30 minutes or longer.`
+
+This is expected. Subsequent runs in the same session reuse the compiled kernels.
+
+### Diagnosing GPU detection
+
+The setup and training logs now explicitly report:
+- Whether `/dev/nvidiactl` and `/dev/nvidia0` are present
+- Detected compute capability from `nvidia-smi`
+- Which TensorFlow spec was chosen and why
+- Whether `MWW_TF_SPEC` override is active
+- Which allocator and XLA flags are in use
+- Whether GPU or CPU training is being attempted
+
+---
+
+
 
 Built on top of the excellent  
 **https://github.com/kahrendt/microWakeWord**

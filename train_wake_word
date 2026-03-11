@@ -88,6 +88,11 @@ case "${GPU_COMPUTE_CAPABILITY}" in
     12.*) IS_BLACKWELL=true ;;
 esac
 
+# Log GPU device file presence for diagnostics.
+echo "   Device check: /dev/nvidiactl=$([ -c /dev/nvidiactl ] && echo present || echo absent)" \
+     " /dev/nvidia0=$([ -e /dev/nvidia0 ] && echo present || echo absent)"
+[ -n "${GPU_COMPUTE_CAPABILITY}" ] && echo "   Detected compute capability: ${GPU_COMPUTE_CAPABILITY}"
+
 export TF_CPP_MIN_LOG_LEVEL="${TF_CPP_MIN_LOG_LEVEL:-9}"
 export TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
 
@@ -99,12 +104,21 @@ if ${IS_BLACKWELL} ; then
     # TF 2.20 + Blackwell is often unstable with cuda_malloc_async.
     unset TF_GPU_ALLOCATOR
     echo "ℹ️  Blackwell detected (compute capability ${GPU_COMPUTE_CAPABILITY}): using compatibility GPU defaults."
+    echo "   TF_GPU_ALLOCATOR: unset (BFC allocator)"
 else
     export TF_GPU_ALLOCATOR="${TF_GPU_ALLOCATOR:-cuda_malloc_async}"
+    [ -n "${GPU_COMPUTE_CAPABILITY}" ] && echo "ℹ️  Non-Blackwell GPU (compute capability ${GPU_COMPUTE_CAPABILITY}): using standard GPU defaults."
+    echo "   TF_GPU_ALLOCATOR=${TF_GPU_ALLOCATOR}"
 fi
 
 # Enable driver-side PTX JIT fallback when ptxas/nvlink are unavailable.
-[ -z "${XLA_FLAGS:-}" ] && export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+if [ -z "${XLA_FLAGS:-}" ] ; then
+    export XLA_FLAGS="--xla_gpu_unsafe_fallback_to_driver_on_ptxas_not_found"
+    echo "   XLA_FLAGS=${XLA_FLAGS} (set by script)"
+else
+    echo "   XLA_FLAGS=${XLA_FLAGS} (inherited from environment)"
+fi
+echo "   TF_XLA_FLAGS=${TF_XLA_FLAGS:-<unset>}"
 
 export NVIDIA_TF32_OVERRIDE=1
 export TF_CUDNN_WORKSPACE_LIMIT_IN_MB=512
