@@ -45,10 +45,15 @@ cd "${DATA_DIR}"
 
 [ -z "${GPU}" ] && {
     GPU=false
-    [ -c /dev/nvidiactl ] && {
+    if [ -c /dev/nvidiactl ]; then
         GPU=true
         echo "   Nvidia GPU detected"
-    }
+    elif command -v nvidia-smi >/dev/null 2>&1 \
+            && nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+                | grep -q '[0-9]'; then
+        GPU=true
+        echo "   Nvidia GPU detected (via nvidia-smi)"
+    fi
 }
 
 "${GPU}" || export CUDA_VISIBLE_DEVICES=-1
