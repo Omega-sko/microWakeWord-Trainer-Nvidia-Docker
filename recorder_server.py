@@ -372,7 +372,7 @@ def _normalize_output_artifacts(safe_word: str, log_path: Path) -> None:
 
 # -------------------- training worker --------------------
 
-def _run_training_background(safe_word: str, allow_no_personal: bool):
+def _run_training_background(safe_word: str, allow_no_personal: bool, device_mode: str = "auto"):
     with STATE_LOCK:
         raw_phrase = STATE.get("raw_phrase") or ""
         language = STATE.get("language") or DEFAULT_LANGUAGE
@@ -413,9 +413,11 @@ def _run_training_background(safe_word: str, allow_no_personal: bool):
 
         env = os.environ.copy()
         env["MWW_ALLOW_NO_PERSONAL"] = "true" if allow_no_personal else "false"
+        env["MWW_TRAINING_DEVICE_MODE"] = device_mode
 
         _append_train_log("===== Training (train_wake_word) =====")
         _append_train_log(f"→ Running: {cmd_str}")
+        _append_train_log(f"   Training device mode: {device_mode}")
 
         with open(log_path, "a", encoding="utf-8") as lf:
             proc = subprocess.Popen(
@@ -565,6 +567,9 @@ async def upload_take(
 def train_now(payload: Dict[str, Any] = None):
     payload = payload or {}
     allow_no_personal = bool(payload.get("allow_no_personal", False))
+    device_mode = str(payload.get("device_mode", "auto")).strip().lower()
+    if device_mode not in ("auto", "cpu", "gpu-preferred", "gpu-only"):
+        device_mode = "auto"
 
     with STATE_LOCK:
         safe_word = STATE["safe_word"]
@@ -607,7 +612,7 @@ def train_now(payload: Dict[str, Any] = None):
             status_code=400,
         )
 
-    t = threading.Thread(target=_run_training_background, args=(safe_word, allow_no_personal), daemon=True)
+    t = threading.Thread(target=_run_training_background, args=(safe_word, allow_no_personal, device_mode), daemon=True)
     t.start()
 
     return {
@@ -616,6 +621,7 @@ def train_now(payload: Dict[str, Any] = None):
         "safe_word": safe_word,
         "personal_samples_used": takes_received >= min_required,
         "allow_no_personal": allow_no_personal,
+        "device_mode": device_mode,
     }
 
 

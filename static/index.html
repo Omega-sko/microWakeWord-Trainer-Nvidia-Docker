@@ -220,6 +220,14 @@
         <button id="beginBtn" disabled class="primary">🎬 Begin recording</button>
         <button id="resetBtn" disabled>🧹 Reset recordings</button>
         <button id="trainBtn" disabled>🧠 Start training</button>
+        <label class="muted">Training device
+          <select id="deviceMode" style="padding:10px 12px;font-size:15px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.35);color:var(--text);outline:none;">
+            <option value="auto" selected>Auto</option>
+            <option value="cpu">CPU only</option>
+            <option value="gpu-preferred">GPU preferred</option>
+            <option value="gpu-only">GPU only (no CPU fallback)</option>
+          </select>
+        </label>
         <span id="status" class="pill">Idle</span>
       </div>
 
@@ -613,11 +621,12 @@
     logEl.textContent = "(preparing…)\n";
 
     try {
+      const deviceMode = ($("deviceMode") || {}).value || "auto";
       // Kick off training first
       await api("/api/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allow_no_personal: allowNoPersonal })
+        body: JSON.stringify({ allow_no_personal: allowNoPersonal, device_mode: deviceMode })
       });
 
       // Only start polling AFTER training was successfully kicked off
