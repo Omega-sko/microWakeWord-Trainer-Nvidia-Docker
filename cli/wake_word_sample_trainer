@@ -84,10 +84,46 @@ echo "   Device check: /dev/nvidiactl=$([ -c /dev/nvidiactl ] && echo present ||
 ALLOW_CPU_FALLBACK_DEFAULT="true"
 ALLOW_CPU_FALLBACK="$(normalize_bool "${MWW_ALLOW_CPU_FALLBACK:-${ALLOW_CPU_FALLBACK_DEFAULT}}")"
 
+# Training device mode: auto | cpu | gpu-preferred | gpu-only
+# Set via MWW_TRAINING_DEVICE_MODE (passed from recorder UI / environment).
+TRAINING_DEVICE_MODE="${MWW_TRAINING_DEVICE_MODE:-auto}"
+case "${TRAINING_DEVICE_MODE}" in
+  cpu|gpu-preferred|gpu-only|auto) ;;
+  *) TRAINING_DEVICE_MODE="auto" ;;
+esac
+
+# Apply mode-specific overrides before logging.
+case "${TRAINING_DEVICE_MODE}" in
+  gpu-only)
+    # GPU only: disable CPU fallback regardless of MWW_ALLOW_CPU_FALLBACK.
+    ALLOW_CPU_FALLBACK="false"
+    ;;
+  gpu-preferred)
+    # GPU preferred: allow CPU fallback (mirrors current GPU-first behaviour).
+    ALLOW_CPU_FALLBACK="true"
+    ;;
+esac
+
 if [ "${IS_BLACKWELL}" = "true" ]; then
   echo "ℹ️  Blackwell GPU detected (compute capability ${GPU_COMPUTE_CAPABILITY})."
   echo "ℹ️  Using GPU compatibility retries; CPU fallback is ${ALLOW_CPU_FALLBACK} (override with MWW_ALLOW_CPU_FALLBACK=true|false)."
 fi
+
+echo "ℹ️  Training device mode: ${TRAINING_DEVICE_MODE} (MWW_TRAINING_DEVICE_MODE)"
+case "${TRAINING_DEVICE_MODE}" in
+  cpu)
+    echo "ℹ️  CPU-only mode: GPU disabled (CUDA_VISIBLE_DEVICES will be set to empty)."
+    ;;
+  gpu-only)
+    echo "ℹ️  GPU-only mode: CPU fallback is disabled by policy."
+    ;;
+  gpu-preferred)
+    echo "ℹ️  GPU-preferred mode: GPU first, CPU fallback allowed if GPU fails."
+    ;;
+  auto)
+    echo "ℹ️  Auto mode: default GPU-first behaviour with existing retry/fallback logic."
+    ;;
+esac
 
 # Enable driver-side PTX JIT fallback when ptxas/nvlink are unavailable.
 if [ -z "${XLA_FLAGS:-}" ]; then
@@ -415,6 +451,32 @@ echo "   CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<unset (all GPUs visible)>
 
 TRAINING_DONE="false"
 
+# ---- CPU-only mode: skip GPU entirely ----
+if [ "${TRAINING_DEVICE_MODE}" = "cpu" ]; then
+  echo "↪️  CPU-only mode: running training with GPU disabled (CUDA_VISIBLE_DEVICES='')."
+  export CUDA_VISIBLE_DEVICES=""
+  unset TF_GPU_ALLOCATOR
+  unset TF_XLA_FLAGS
+  # CPU should not inherit GPU-specific XLA flags.
+  if [ -n "${ORIG_XLA_FLAGS}" ]; then
+    export XLA_FLAGS="${ORIG_XLA_FLAGS}"
+  else
+    unset XLA_FLAGS
+  fi
+
+  if run_attempt "CPU-only training (CUDA_VISIBLE_DEVICES='')" ; then
+    echo "✅ Training complete (CPU-only)."
+    TRAINING_DONE="true"
+  else
+    print_failure_diagnostic
+    echo "❌ Training failed (CPU-only mode). Raw log: ${TRAIN_LOG_RAW}" >&2
+    exit 1
+  fi
+fi
+
+# ---- GPU-first modes: auto, gpu-preferred, gpu-only ----
+if [ "${TRAINING_DONE}" != "true" ] && [ "${TRAINING_DEVICE_MODE}" != "cpu" ]; then
+
 if run_attempt "Attempt 1/3: GPU training (default runtime profile)" ; then
   echo "✅ Training complete (GPU path)."
   TRAINING_DONE="true"
@@ -450,10 +512,21 @@ else
   fi
 fi
 
+fi  # end GPU-first block
+
 if [ "${TRAINING_DONE}" != "true" ]; then
   if ! is_gpu_runtime_failure; then
     print_failure_diagnostic
     echo "❌ Training failed (does not look GPU/OOM/runtime). Raw log: ${TRAIN_LOG_RAW}" >&2
+    exit 1
+  fi
+
+  if [ "${TRAINING_DEVICE_MODE}" = "gpu-only" ]; then
+    print_failure_diagnostic
+    echo "❌ GPU-only mode: GPU training failed after all retries. CPU fallback is disabled by policy." >&2
+    echo "   To allow CPU fallback, change the training device mode to 'Auto' or 'GPU preferred'." >&2
+    echo "   Raw log:      ${TRAIN_LOG_RAW}" >&2
+    echo "   Filtered log: ${TRAIN_LOG}" >&2
     exit 1
   fi
 

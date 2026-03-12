@@ -192,6 +192,7 @@ docker run -d \
 | `MWW_TF_SPEC` | Override TensorFlow package spec, e.g. `tf-nightly[and-cuda]` | Auto-detected |
 | `MWW_KERAS_SPEC` | Override Keras package spec, e.g. `keras==3.12.0` | Auto-detected |
 | `MWW_ALLOW_CPU_FALLBACK` | Allow CPU fallback if GPU training fails (`true`/`false`) | `true` |
+| `MWW_TRAINING_DEVICE_MODE` | Training device mode: `auto`, `cpu`, `gpu-preferred`, `gpu-only` | `auto` |
 | `MWW_TENSORBOARD_SPEC` | Comma-separated TensorBoard specs, e.g. `tensorboard==2.20.0,tensorboard-data-server==0.7.2` | Auto-detected |
 
 ### First-run note
@@ -201,6 +202,19 @@ On Blackwell, the first training run **will be slower** than subsequent runs bec
 > `TensorFlow was not built with CUDA kernel binaries compatible with compute capability 12.0. CUDA kernels will be jit-compiled from PTX, which could take 30 minutes or longer.`
 
 This is expected. Subsequent runs in the same session reuse the compiled kernels.
+
+### Training device mode selector
+
+The Web UI includes a **Training device** dropdown next to the "Start training" button with four options:
+
+| Mode | Behavior |
+|---|---|
+| **Auto** (default) | Current behavior: GPU first, CPU fallback if GPU fails and `MWW_ALLOW_CPU_FALLBACK=true` |
+| **CPU only** | Forces CPU training. GPU is never used. |
+| **GPU preferred** | GPU first; if GPU fails, CPU fallback is always allowed. |
+| **GPU only (no CPU fallback)** | GPU only. If GPU training fails after all retries, the job fails with a clear error. Useful for debugging GPU issues. |
+
+The selected mode is passed to the training pipeline via the `MWW_TRAINING_DEVICE_MODE` environment variable. It can also be set directly in the environment when running training scripts manually.
 
 ### Diagnosing GPU detection
 
