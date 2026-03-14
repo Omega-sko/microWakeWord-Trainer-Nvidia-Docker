@@ -238,6 +238,14 @@ echo "   Installing piper-sample-generator"
 pip_install -e "${PSG}"
 git -C tools/piper-sample-generator clean -fd &>/dev/null
 
+# Verify the installed entrypoint is importable.
+if python -c "import piper_sample_generator" 2>/dev/null ; then
+    echo "   piper-sample-generator module available (python -m piper_sample_generator)"
+else
+    echo "   WARNING: piper_sample_generator module not importable after install." >&2
+    echo "            Sample generation may fail. Check installation above for errors." >&2
+fi
+
 MODELS_DIR="${PSG}/models"
 VOICES_DIR="${PSG}/voices"
 mkdir -p "${VOICES_DIR}"

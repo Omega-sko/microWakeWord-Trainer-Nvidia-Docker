@@ -50,6 +50,31 @@ MODELS_DIR="${PSG}/models"
 VOICES_DIR="${PSG}/voices"
 SAMPLES_DIR="${WORK_DIR}/wake_word_samples"
 
+# ---------------------------------------------------------------------------
+# Resolve piper-sample-generator entrypoint robustly.
+# Preferred: installed Python module (python -m piper_sample_generator).
+# Fallback:  generate_samples.py in the cloned repo root (legacy layout).
+# ---------------------------------------------------------------------------
+PSG_SCRIPT="${PSG}/generate_samples.py"
+
+_is_psg_module_available() {
+    python -c "import piper_sample_generator" 2>/dev/null
+}
+
+run_psg() {
+    if _is_psg_module_available ; then
+        python -m piper_sample_generator "$@"
+    elif [ -f "${PSG_SCRIPT}" ] ; then
+        python "${PSG_SCRIPT}" "$@"
+    else
+        echo "ERROR: Could not find the piper-sample-generator entrypoint." >&2
+        echo "       Tried Python module: python -m piper_sample_generator (not importable)" >&2
+        echo "       Tried script:        ${PSG_SCRIPT} (not found)" >&2
+        echo "       Re-run setup_python_venv to install piper-sample-generator." >&2
+        exit 1
+    fi
+}
+
 mkdir -p "${SAMPLES_DIR}" || :
 
 # ---------------------------------------------------------------------------
@@ -99,7 +124,7 @@ if [ "${SAMPLES}" -eq 1 ] ; then
     wake_word_filename="${WAKE_WORD//[ \`~\!@#\$%^&*\(\)\{\}\[\]\|\;\'\"<>.?\/]/_}"
 
     mkdir -p "${WORK_DIR}/test_sample" || :
-    "${PSG}/generate_samples.py" "${WAKE_WORD}" \
+    run_psg "${WAKE_WORD}" \
         "${MODEL_ARGS[@]}" \
         --max-samples ${SAMPLES} \
         --batch-size ${BATCH_SIZE} \
@@ -138,7 +163,7 @@ export GRPC_VERBOSITY=ERROR
 echo "   Generating samples"
 rm -rf "${SAMPLES_DIR}" || :
 mkdir -p "${SAMPLES_DIR}" || :
-"${PSG}/generate_samples.py" "${WAKE_WORD}" \
+run_psg "${WAKE_WORD}" \
     "${MODEL_ARGS[@]}" \
     --max-samples ${SAMPLES} \
     --batch-size ${BATCH_SIZE} \
